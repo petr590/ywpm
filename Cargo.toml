@@ -1,0 +1,30 @@
+[package]
+name = "ywpm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+signal-hook = "0.4.4"
+indoc       = "2.0"
+rand        = "0.10"
+walkdir     = "2.5"
+yaml_serde  = "0.10"
+serde       = { version = "1.0", features = ["derive", "rc"] }
+nix         = { version = "0.31", features = ["poll", "signal"] }
+phf         = { version = "0.13", features = ["macros"] }
+
+
+[[bin]]
+name = "ywpm-daemon"
+path = "src/server/main.rs"
+
+[[bin]]
+name = "ywpm"
+path = "src/client/main.rs"
+
+[dev-dependencies]
+criterion = { version = "0.8", features = ["html_reports"] }
+
+[[bench]]
+name = "socket_benches"
+harness = false
