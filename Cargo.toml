@@ -8,10 +8,12 @@ signal-hook = "0.4.4"
 indoc       = "2.0"
 rand        = "0.10"
 walkdir     = "2.5"
+itertools   = "0.15.0"
 yaml_serde  = "0.10"
 serde       = { version = "1.0", features = ["derive", "rc"] }
 nix         = { version = "0.31", features = ["poll", "signal"] }
-phf         = { version = "0.13", features = ["macros"] }
+phf         = { version = "0.14", features = ["macros"] }
+thread_local = "1.1.10"
 
 
 [[bin]]

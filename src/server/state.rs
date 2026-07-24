@@ -1,15 +1,18 @@
-use std::rc::Rc;
-use std::collections::HashMap;
+use std::cell::Ref;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::error::Error;
 use std::fs::{self, File, Metadata};
+use itertools::Itertools;
 
 use phf::{Set, phf_set};
 use rand::random_range;
 use walkdir::WalkDir;
 
+use crate::server::backend::run_backend;
 use crate::server::display_mode::DisplayMode;
-use crate::server::file_or_dir::FileOrDir;
+use crate::server::wallpaper_node::{WallpaperNode, SharedWallpaperNode};
+use crate::server::settings::{Settings, DEFAULT_SETTINGS};
 use crate::server::wallpaper_group::WallpaperGroup;
 use crate::server::dtos::StateDto;
 use crate::server::action_perform_error::ActionPerformError;
@@ -18,13 +21,16 @@ use crate::server::action_perform_error::ActionPerformError;
 
 #[derive(Debug, Clone)]
 pub struct State {
-    current_wallpaper_path: Option<Rc<str>>,
-    wallpapers: HashMap<Rc<str>, Rc<FileOrDir>>,
+    current_wallpaper_path: Option<String>,
+    wallpapers: HashMap<String, SharedWallpaperNode>,
     groups:     HashMap<String, WallpaperGroup>,
 }
 
 
 impl State {
+
+    // ----------------------------------------- Creation -----------------------------------------
+
     pub fn new() -> Self {
         Self {
             current_wallpaper_path: Option::None,
@@ -33,16 +39,28 @@ impl State {
         }
     }
 
-    pub fn from(_dto: &StateDto) -> Self {
-        todo!();
+    pub fn from(dto: &StateDto) -> Self {
+        let wallpapers = dto.wallpapers.iter()
+                .map(|node| (node.borrow().path().clone(), node.clone()))
+                .collect();
+
+        let groups = dto.groups.iter()
+                .map(|(name, group_dto)| (name.clone(), WallpaperGroup::from(group_dto, &wallpapers)))
+                .collect();
+
+        Self {
+            current_wallpaper_path: dto.current_wallpaper_path.clone(),
+            wallpapers,
+            groups,
+        }
     }
 
     pub fn as_dto(&self) -> StateDto {
         StateDto {
-            current_wallpaper_path: self.clone_current_wallpaper_path().unwrap_or_default(),
+            current_wallpaper_path: self.current_wallpaper_path.clone(),
 
             wallpapers: self.wallpapers.iter()
-                .map(|(_path, file_or_dir)| file_or_dir.clone())
+                .map(|(_path, node)| node.clone())
                 .collect(),
             
             groups: self.groups.iter()
@@ -52,30 +70,7 @@ impl State {
     }
 
 
-    pub fn add_wallpaper(&mut self, path: impl Into<Rc<str>>, mode: DisplayMode, recursive_level: u16) -> &mut Rc<FileOrDir> {
-        let key = path.into();
-
-        self.wallpapers.entry(key.clone())
-            .or_insert(Rc::new(FileOrDir::new(key, mode, recursive_level)))
-    }
-
-    pub fn remove_wallpaper<'a>(&mut self, path: impl Into<&'a Rc<str>>) {
-        self.wallpapers.remove(path.into());
-    }
-
-    pub fn get_wallpaper_mut<'a>(&mut self, path: impl Into<&'a Rc<str>>) -> Option<&mut Rc<FileOrDir>> {
-        self.wallpapers.get_mut(path.into())
-    }
-
-
-    pub fn add_group(&mut self, name: impl Into<String>) -> &mut WallpaperGroup {
-        self.groups.entry(name.into()).or_insert(WallpaperGroup::new())
-    }
-
-    pub fn remove_group<'a>(&mut self, name: impl Into<&'a String>) {
-        self.groups.remove(name.into());
-    }
-
+    // ---------------------------------------- Read/write ----------------------------------------
 
     pub fn read_or_create_empty(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         if let Some(dir) = path.as_ref().parent() {
@@ -97,62 +92,266 @@ impl State {
 
     fn create_and_write_empty_config(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let state = Self::new();
-        let content = yaml_serde::to_string(&state.as_dto())?;
-        fs::write(&path, content)?;
+        state.write_to(path)?;
         Ok(state)
     }
 
-    pub fn clone_current_wallpaper_path(&self) -> Option<String> {
-        self.current_wallpaper_path.as_ref().map(|path| String::from(&**path))
+    pub fn write_to(&self, path: impl AsRef<Path>) -> Result<(), Box<dyn Error>> {
+        let content = yaml_serde::to_string(&self.as_dto())?;
+        fs::write(&path, content)?;
+        Ok(())
+    }
+
+
+    // ----------------------------------------- Backend ------------------------------------------
+
+    pub fn start_backend(&mut self) -> Result<(), Box<dyn Error>> {
+        if let Some(current_path) = &self.current_wallpaper_path {
+
+            let opt_node = self.wallpapers.iter()
+                    .filter_map(|(path, node)| if current_path.starts_with(path) { Some(node) } else { None })
+                    .max_by_key(|node| node.borrow().path().len())
+                    .cloned();
+
+            let node = match opt_node {
+                Some(node) => SharedWallpaperNode::new(
+                    current_path,
+                    node.borrow().mode.clone(),
+                    node.borrow().recursive_level.clone()
+                ),
+
+                None => self.update_node(&current_path.clone(), &DEFAULT_SETTINGS)
+            };
+
+            run_backend(&node.borrow())?;
+        }
+
+        Ok(())
+    }
+
+
+    // ------------------------------------------ Debug -------------------------------------------
+
+    #[cfg(debug_assertions)]
+    pub fn add_wallpaper(&mut self, path: impl Into<String>, mode: DisplayMode, recursive_level: u16) -> &mut SharedWallpaperNode {
+        let key = path.into();
+
+        self.wallpapers.entry(key.clone())
+            .or_insert(SharedWallpaperNode::new(key, mode, recursive_level))
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn add_group(&mut self, name: impl Into<String>) -> &mut WallpaperGroup {
+        self.groups
+            .entry(name.into())
+            .or_insert_with(|| WallpaperGroup::new())
+    }
+
+
+    // ---------------------------------------- Wallpapers ----------------------------------------
+
+    pub fn get_wallpaper_list(&self) -> String {
+        if self.wallpapers.is_empty() {
+            String::from("No wallpapers are found")
+        } else {
+            format!("Wallpapers:\n{}",
+                    self.wallpapers.values()
+                        .map(|node| node.borrow().path().clone())
+                        .format("\n")
+            )
+        }
+    }
+
+    pub fn get_current_wallpaper_path(&self) -> &Option<String> {
+        &self.current_wallpaper_path
+    }
+
+    pub fn set_wallpaper(&mut self, path: impl Into<String>, settings: Settings) -> Result<(), ActionPerformError> {
+        let path = path.into();
+        let node = self.update_node(&path, &settings);
+
+        match run_backend(&node.borrow()) {
+            Ok(()) => {
+                self.current_wallpaper_path = Some(path);
+                Ok(())
+            },
+            Err(err) => {
+                self.current_wallpaper_path = None;
+                Err(ActionPerformError::new(err.to_string()))
+            }
+        }
     }
 
     pub fn set_random_wallpaper(&mut self) -> Result<String, ActionPerformError> {
-        let paths = self.all_wallpaper_paths();
+        let (nodes, mut warning) = self.all_wallpapers();
 
-        if paths.is_empty() {
+        if nodes.is_empty() {
             return Err(ActionPerformError::new("Can't set random path because there are no valid paths"));
         }
 
-        let path = &paths[random_range(0..paths.len())];
+        let node = &nodes[random_range(0..nodes.len())];
 
-        self.current_wallpaper_path = Option::Some(path.clone());
-        Ok(format!("Current wallpaper set: '{}'", path))
+        self.current_wallpaper_path = Option::Some(node.path().clone());
+
+        match run_backend(node) {
+            Ok(()) => {
+                if !warning.is_empty() {
+                    warning.push('\n');
+                }
+
+                Ok(format!("{}Current wallpaper set: '{}'", warning, node.path()))
+            },
+
+            Err(err) => Err(ActionPerformError::new(err.to_string())),
+        }
     }
 
-    pub fn all_wallpaper_paths(&self) -> Vec<Rc<str>> {
+    pub fn all_wallpapers(&self) -> (Vec<WallpaperNode>, String) {
         let mut paths = Vec::new();
         let mut warning = String::new();
 
-        for file_or_dir in self.wallpapers.values() {
-            let path = Path::new(&**file_or_dir.path());
+        for rc in self.wallpapers.values() {
+            let node = rc.borrow();
+            let path = Path::new(node.path());
 
             match fs::metadata(path) {
-                Ok(metadata) => process_file_or_dir(&mut paths, &mut warning, file_or_dir, metadata),
-                Err(err) => append_to_warning(&mut warning, "couldn't get file metadata", err, file_or_dir.path()),
+                Ok(metadata) => process_node(&mut paths, &mut warning, node, metadata),
+                Err(err) => append_to_warning(&mut warning, "couldn't get file metadata", err, node.path()),
             }
         }
 
-        paths
+        (paths, warning)
     }
+    
 
-    pub fn configure_wallpaper(&mut self, path: impl Into<Rc<str>>, mode: Option<DisplayMode>) -> Result<String, ActionPerformError> {
+    // ------------------------------------------ Nodes -------------------------------------------
+
+    pub fn add_node(&mut self, path: impl Into<String>, settings: Settings) -> Result<(), ActionPerformError> {
         let path = path.into();
-        let file_or_dir = self.wallpapers.entry(path.clone()).or_insert(Rc::new(FileOrDir::new(path, DisplayMode::new(), 1)));
+        let node = self.update_node(&path, &settings);
 
-        if let Some(mode) = mode {
-            file_or_dir.mode = mode;
+        if self.current_wallpaper_path.as_ref().is_some_and(|current_path| *current_path == path) {
+            match run_backend(&node.borrow()) {
+                Ok(()) => {},
+                Err(err) => {
+                    self.current_wallpaper_path = None;
+                    return Err(ActionPerformError::new(err.to_string()));
+                }
+            }
         }
 
-        Ok(String::new())
+        Ok(())
+    }
+
+    pub fn remove_nodes(&mut self, paths: &Vec<String>) {
+        for path in paths {
+            if self.current_wallpaper_path.as_ref().is_some_and(|current_path| *current_path == *path) {
+                
+            }
+
+            for (_, group) in &mut self.groups {
+                group.remove(path);
+            }
+
+            self.wallpapers.remove(path);
+        }
+    }
+
+    fn update_node(&mut self, path: &String, settings: &Settings) -> SharedWallpaperNode {
+        let path = normalize_path(path);
+
+        let node = self.wallpapers
+            .entry(path.clone())
+            .or_insert_with(|| SharedWallpaperNode::new(path, DisplayMode::new(), 1));
+
+        settings.update_node(&mut node.borrow_mut());
+        node.clone()
+    }
+
+
+    // ------------------------------------------ Groups ------------------------------------------
+
+    pub fn get_group_list(&self) -> String {
+        if self.groups.is_empty() {
+            String::from("No groups are found")
+        } else {
+            format!("Groups: [{}]", self.groups.keys().format(", "))
+        }
+    }
+
+    pub fn get_group_info(&self, name: &String) -> Result<String, ActionPerformError> {
+        match self.groups.get(name) {
+            Some(group) => {
+                yaml_serde::to_string(&group.as_dto())
+                    .map_err(|err| ActionPerformError::new(err.to_string()))
+            }
+
+            None => Err(ActionPerformError::new(format!("Group '{name}' not found")))
+        }
+    }
+
+    pub fn new_group(&mut self, name: impl Into<String>, paths: &Vec<String>) -> Result<(), ActionPerformError> {
+        let group_wallpapers = paths.iter()
+            .map(|path| self.update_node(path, &DEFAULT_SETTINGS))
+            .collect::<HashSet<SharedWallpaperNode>>();
+
+        self.groups.entry(name.into())
+            .or_insert_with(WallpaperGroup::new)
+            .add_all(group_wallpapers);
+
+
+        Ok(())
+    }
+
+    pub fn remove_group(&mut self, name: &String) {
+        self.groups.remove(name.into());
+    }
+
+
+    pub fn add_to_group(&mut self, name: impl Into<String>, paths: &Vec<String>) -> Result<(), ActionPerformError> {
+        self.new_group(name, paths)
+    }
+
+    pub fn remove_from_group(&mut self, name: &String, paths: &Vec<String>) -> Result<(), ActionPerformError> {
+        let group = self.get_group_mut(name)?;
+
+        for path in paths {
+            group.remove(&path);
+        }
+
+        Ok(())
+    }
+
+    pub fn clear_group(&mut self, name: &String) -> Result<(), ActionPerformError> {
+        self.get_group_mut(name)?.clear();
+        Ok(())
+    }
+
+    fn get_group_mut(&mut self, name: &String) -> Result<&mut WallpaperGroup, ActionPerformError> {
+        self.groups
+            .get_mut(name.into())
+            .ok_or_else(|| ActionPerformError::new(format!("Group '{}' not found", name)))
     }
 }
 
 
-fn process_file_or_dir(paths: &mut Vec<Rc<str>>, warning: &mut String, file_or_dir: &FileOrDir, metadata: Metadata) {
-    let path = Path::new(&**file_or_dir.path());
+// ---------------------------------------- Util functions ----------------------------------------
+
+fn normalize_path(src_path: &String) -> String {
+    let path = std::path::absolute(src_path);
+
+    match path {
+        Ok(path) => path.to_str().map_or_else(|| src_path.clone(), String::from),
+        Err(_) => src_path.clone()
+    }
+}
+
+
+fn process_node(paths: &mut Vec<WallpaperNode>, warning: &mut String, current_node: Ref<WallpaperNode>, metadata: Metadata) {
+    let path = Path::new(current_node.path());
 
     if metadata.is_file() && ext_matches(path) && check_accessible(path, warning) {
-        paths.push(file_or_dir.path().clone());
+        paths.push(current_node.clone());
         return;
     }
     
@@ -160,19 +359,23 @@ fn process_file_or_dir(paths: &mut Vec<Rc<str>>, warning: &mut String, file_or_d
         let walk_dir = WalkDir::new(path)
                 .follow_links(true)
                 .same_file_system(false)
-                .max_depth(file_or_dir.recursive_level as usize);
+                .max_depth(current_node.recursive_level as usize);
 
         for entry in walk_dir {
             match entry {
                 Ok(dir_entry) => {
                     if dir_entry.file_type().is_file() && ext_matches(dir_entry.path()) && check_accessible(dir_entry.path(), warning) {
-                        paths.push(Rc::from(dir_entry.path().to_str().unwrap_or_default()));
+                        paths.push(WallpaperNode::new(
+                            String::from(dir_entry.path().to_str().unwrap_or_default()),
+                            current_node.mode.clone(),
+                            current_node.recursive_level.clone()
+                        ));
                     }
                 }
 
                 Err(err) => {
                     if err.io_error().is_some() {
-                        append_to_warning(warning, "I/O error", err, file_or_dir.path());
+                        append_to_warning(warning, "I/O error", err, current_node.path());
 
                     } else {
                         warning.push_str("Warning: ");

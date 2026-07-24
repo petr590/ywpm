@@ -1,6 +1,6 @@
 const PROGRAM_DIR: &str = "ywpm";
 const SOCKET_NAME: &str = "socket.sock";
-const CONFIG_NAME: &str = "config.toml";
+const CONFIG_NAME: &str = "config.yaml";
 
 
 #[cfg(debug_assertions)]

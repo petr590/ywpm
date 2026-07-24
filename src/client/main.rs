@@ -16,10 +16,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (is_ok, message) = read_response(&mut BufReader::new(&mut stream))?;
 
     if is_ok {
-        println!("{message}");
+        print!("{message}");
+
+        if !message.ends_with("\n") {
+            println!();
+        }
+
         Ok(())
+
     } else {
-        eprintln!("{message}");
+        eprint!("{message}");
+
+        if !message.ends_with("\n") {
+            eprintln!();
+        }
+
         exit(1);
     }
 }

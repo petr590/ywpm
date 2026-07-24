@@ -1,12 +1,11 @@
-use std::collections::HashSet;
-use std::rc::Rc;
+use std::collections::{HashMap, HashSet};
 
-use crate::server::file_or_dir::FileOrDir;
+use crate::server::wallpaper_node::SharedWallpaperNode;
 use crate::server::dtos::WallpaperGroupDto;
 
 #[derive(Debug, Clone)]
 pub struct WallpaperGroup {
-    wallpapers: HashSet<Rc<FileOrDir>>,
+    wallpapers: HashSet<SharedWallpaperNode>,
 }
 
 impl WallpaperGroup {
@@ -15,15 +14,37 @@ impl WallpaperGroup {
         Self { wallpapers: HashSet::new() }
     }
 
-    pub fn add(&mut self, file_or_dir: Rc<FileOrDir>) {
-        self.wallpapers.insert(file_or_dir);
+    pub fn from(dto: &WallpaperGroupDto, wallpapers: &HashMap<String, SharedWallpaperNode>) -> Self {
+        Self {
+            wallpapers: dto.wallpapers.iter()
+                .map(|path| wallpapers.get(path).cloned())
+                .flatten().collect()
+        }
+    }
+
+    pub fn add(&mut self, node: SharedWallpaperNode) {
+        self.wallpapers.insert(node);
+    }
+
+    pub fn add_all(&mut self, iter: impl IntoIterator<Item = SharedWallpaperNode>) {
+        for node in iter {
+            self.wallpapers.insert(node);
+        }
     }
 
     pub fn as_dto(&self) -> WallpaperGroupDto {
         WallpaperGroupDto {
             wallpapers: self.wallpapers.iter()
-                .map(|file_or_dir| file_or_dir.path().to_string())
+                .map(|node| node.borrow().path().to_string())
                 .collect()
         }
+    }
+
+    pub fn remove(&mut self, path: &String) {
+        self.wallpapers.retain(|node| node.borrow().path() == path);
+    }
+
+    pub fn clear(&mut self) {
+        self.wallpapers.clear();
     }
 }

@@ -6,6 +6,7 @@ use nix::sys::signal::{Signal, SigSet};
 use nix::sys::signalfd::{SignalFd, SfdFlags};
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 
+use ywpm::server::backend::stop_backend;
 use ywpm::server::state::State;
 use ywpm::server::args_parser::parse_args;
 use ywpm::reader::read_string_vec;
@@ -13,7 +14,8 @@ use ywpm::writer::write_response;
 use ywpm::util::{get_socket_path, get_config_path};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let state = State::read_or_create_empty(get_config_path())?;
+    let mut state = State::read_or_create_empty(get_config_path())?;
+    state.start_backend()?;
     main_loop(state)
 }
 
@@ -60,8 +62,12 @@ fn main_loop(mut state: State) -> Result<(), Box<dyn Error>> {
                         println!("\nReceived shutdown signal! Exiting gracefully...");
 
                         let _ = std::fs::remove_file(&socket_path);
+
+                        if let Err(err) = state.write_to(get_config_path()) {
+                            eprintln!("Error while writing config: {}", err.to_string());
+                        }
                         
-                        // TODO: Здесь закрываем mpvpaper, удаляем файлы и т.д.
+                        stop_backend();
                         break; 
                     }
                 }

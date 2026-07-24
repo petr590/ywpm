@@ -12,14 +12,16 @@ macro_rules! GET_HELP_MESSAGE {
                 {} <ДЕЙСТВИЕ> [ОПЦИИ] [АРГУМЕНТЫ]
 
             ДЕЙСТВИЯ (Обои):
+                list                    Получить список всех путей к обоям
                 get                     Получить путь к текущим обоям
-                set <ПУТЬ>              Установить указанные обои
-                random                  Установить случайные обои
-                configure               Настроить параметры обоев (в частности, --mode)
+                set <ПУТЬ>              Установить указанные обои. Если указана папка, то устанавливаются случайные обои из папки
+                random                  Установить случайные обои из всех в списке
+                add <ПУТЬ>              Добавить папку/файл в список и, опционально, настроить параметры (--mode, --recursive-level и т.д.)
+                remove <ПУТИ...>        Удалить папку/файл из списка
 
             ДЕЙСТВИЯ (Группы):
-                list-groups                         Показать список всех групп
-                new-group <ИМЯ>                     Создать новую пустую группу
+                group-list                          Показать список всех групп
+                new-group <ИМЯ> [ПУТИ...]           Создать новую группу
                 get-group <ИМЯ>                     Показать информацию и состав группы
                 remove-group <ИМЯ>                  Удалить группу
                 set-group <ИМЯ>                     Установить рандомные обои из группы
@@ -34,12 +36,14 @@ macro_rules! GET_HELP_MESSAGE {
                                         Если опции времени не указаны, обои ставятся только на текущую сессию.
 
             ОБЩИЕ ОПЦИИ:
-                --mode <РЕЖИМ>  Установить режим отображения обоев. По умолчанию: \"cover center\".
+                -m, --mode <РЕЖИМ>  Установить режим отображения обоев. По умолчанию: \"cover center\".
                                 Сторона, к которой будут «прилипать» обои: left, right, top, bottom, vcenter, hcenter, center
                                 Отрисовка изображения:
                                 - cover - изображение выходит за границы экрана без искажения пропорций
                                 - contain - изображение полностью помещается в экран без искажения пропорций
                                 - stretch - изображение растягивается под размер экрана с искажением пропорций
+                
+                -r, --recursive-level <УРОВЕНЬ>  Максимальный уровень рекурсивного поиска подпапок. Никак не влияет на файлы. По умрлчанию: 1.
                 
                 -h, --help           Показать эту справку
                 -v, --version        Показать версию программы
@@ -63,24 +67,17 @@ pub fn parse_args(args: &Vec<String>) -> Result<Action, ArgsParseError> {
                 }
 
                 "-m" | "--mode" => {
-                    match action {
-                        Action::SetWallpaper { ref mut mode, .. } => {
-                            match iter.next() {
-                                Some(value) => *mode = parse_display_mode(value)?,
-                                None => return Err(args_parse_error_format!("Expected value for '{arg}', got end of arguments"))
-                            };
-                        }
-                        
-                        Action::Configure { ref mut mode, .. } => {
-                            match iter.next() {
-                                Some(value) => *mode = parse_display_mode(value)?,
-                                None => return Err(args_parse_error_format!("Expected value for '{arg}', got end of arguments"))
-                            };
-                        }
+                    action.add_setting(arg, iter.next(), |settings, value| {
+                        settings.mode = Option::Some(parse_display_mode(value)?);
+                        Ok(())
+                    })?;
+                }
 
-                        Action::None => return Err(args_parse_error_format!("Cannot use '--mode' before action")),
-                        _            => return Err(args_parse_error_format!("Cannot use '--mode' for action {}", action.get_name())),
-                    }
+                "-r" | "--recursive-level" => {
+                    action.add_setting(arg, iter.next(), |settings, value| {
+                        settings.recursive_level = Option::Some(parse_u16(value, arg)?);
+                        Ok(())
+                    })?;
                 }
 
                 "-s" | "--since" => {} // TODO
@@ -102,7 +99,16 @@ pub fn parse_args(args: &Vec<String>) -> Result<Action, ArgsParseError> {
 
     }
 
+    action.validate()?;
     Ok(action)
+}
+
+
+fn parse_u16(str: &String, arg: &String) -> Result<u16, ArgsParseError> {
+    match str.parse() {
+        Ok(value) => Ok(value),
+        Err(_) => Err(args_parse_error_format!("Invalid value for option '{arg}': '{str}'. Expected integer 0..65535"))
+    }
 }
 
 

@@ -1,10 +1,13 @@
 pub mod display_mode;
-pub mod file_or_dir;
+pub mod display_mode_format;
+pub mod wallpaper_node;
 pub mod wallpaper_group;
 pub mod state;
 pub mod dtos;
 pub mod action;
+pub mod settings;
 pub mod args_parser;
 pub mod args_parse_error;
 pub mod action_perform_error;
 pub mod package_error;
+pub mod backend;
