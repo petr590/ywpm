@@ -6,7 +6,7 @@ pub struct ActionPerformError {
 }
 
 impl ActionPerformError {
-    pub fn new<T: Into<String>>(message: T) -> Self {
+    pub fn new(message: impl Into<String>) -> Self {
         Self { message: message.into() }
     }
 

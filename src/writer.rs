@@ -12,7 +12,7 @@ pub fn write_string_vec(stream: &mut impl Write, vec: &Vec<String>) -> io::Resul
     Ok(())
 }
 
-pub fn write_response(writer: &mut impl Write, is_ok: bool, string: &String) -> io::Result<()> {
+pub fn write_response(writer: &mut impl Write, is_ok: bool, string: &str) -> io::Result<()> {
     writer.write_all(&[if is_ok { 1 } else { 0 }])?;
     writer.write_all(&(string.len() as u32).to_be_bytes())?;
     writer.write_all(&string.as_bytes())?;

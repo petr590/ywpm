@@ -1,5 +1,6 @@
 use std::cell::RefMut;
 
+use crate::server::args_parse_error::ArgsParseError;
 use crate::server::display_mode::DisplayMode;
 use crate::server::wallpaper_node::WallpaperNode;
 
@@ -22,6 +23,12 @@ impl Settings {
         self.mode.is_some() || self.recursive_level.is_some()
     }
 
+    pub fn set_mode(&mut self, mode: DisplayMode) -> Result<(), ArgsParseError> {
+        if self.mode.is_some() {
+            return Err(ArgsParseError::new("More then one '--mode' option specified"));
+        }
+    }
+
     pub fn update_node(&self, node: &mut RefMut<WallpaperNode>) {
         if let Some(mode) = &self.mode {
             node.mode = mode.clone();
@@ -32,5 +39,3 @@ impl Settings {
         }
     }
 }
-
-pub const DEFAULT_SETTINGS: Settings = Settings::new();

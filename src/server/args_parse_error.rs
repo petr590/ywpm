@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{Display, Formatter, Result};
 
 #[derive(Debug)]
 pub struct ArgsParseError {
@@ -15,8 +15,14 @@ impl ArgsParseError {
     }
 }
 
-impl fmt::Display for ArgsParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl PartialEq for ArgsParseError {
+    fn eq(&self, other: &Self) -> bool {
+        self.message == other.message
+    }
+}
+
+impl Display for ArgsParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.message)
     }
 }

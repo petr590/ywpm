@@ -106,14 +106,14 @@ fn handle_client(mut stream: UnixStream, state: &mut State) -> Result<(), Box<dy
     let mut writer = BufWriter::new(&mut stream);
     
     match parse_args(&args) {
-        Err(err) => write_response(&mut writer, false, err.message())?,
-
         Ok(action) => {
             match action.perform(args[0].as_str(), state) {
                 Ok(message) => write_response(&mut writer, true, &message)?,
                 Err(err)    => write_response(&mut writer, false, err.message())?,
             }
-        }
+        },
+
+        Err(err) => write_response(&mut writer, false, err.message())?,
     }
 
     Ok(())

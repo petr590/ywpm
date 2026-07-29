@@ -40,7 +40,7 @@ impl WallpaperGroup {
         }
     }
 
-    pub fn remove(&mut self, path: &String) {
+    pub fn remove(&mut self, path: &str) {
         self.wallpapers.retain(|node| node.borrow().path() == path);
     }
 

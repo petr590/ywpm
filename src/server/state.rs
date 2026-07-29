@@ -9,10 +9,10 @@ use phf::{Set, phf_set};
 use rand::random_range;
 use walkdir::WalkDir;
 
-use crate::server::backend::run_backend;
+use crate::server::backend::{run_backend, stop_backend};
 use crate::server::display_mode::DisplayMode;
 use crate::server::wallpaper_node::{WallpaperNode, SharedWallpaperNode};
-use crate::server::settings::{Settings, DEFAULT_SETTINGS};
+use crate::server::settings::Settings;
 use crate::server::wallpaper_group::WallpaperGroup;
 use crate::server::dtos::StateDto;
 use crate::server::action_perform_error::ActionPerformError;
@@ -120,7 +120,7 @@ impl State {
                     node.borrow().recursive_level.clone()
                 ),
 
-                None => self.update_node(&current_path.clone(), &DEFAULT_SETTINGS)
+                None => self.get_or_insert_node(&current_path.clone())
             };
 
             run_backend(&node.borrow())?;
@@ -166,9 +166,13 @@ impl State {
         &self.current_wallpaper_path
     }
 
-    pub fn set_wallpaper(&mut self, path: impl Into<String>, settings: Settings) -> Result<(), ActionPerformError> {
+    fn is_current_wallpaper_path_equals(&self, path: &str) -> bool {
+        self.current_wallpaper_path.as_ref().is_some_and(|current_path| *current_path == *path)
+    }
+
+    pub fn set_wallpaper(&mut self, path: impl Into<String>, settings: &Settings) -> Result<(), ActionPerformError> {
         let path = path.into();
-        let node = self.update_node(&path, &settings);
+        let node = self.update_node(&path, settings);
 
         match run_backend(&node.borrow()) {
             Ok(()) => {
@@ -226,11 +230,17 @@ impl State {
 
     // ------------------------------------------ Nodes -------------------------------------------
 
-    pub fn add_node(&mut self, path: impl Into<String>, settings: Settings) -> Result<(), ActionPerformError> {
-        let path = path.into();
-        let node = self.update_node(&path, &settings);
+    pub fn add_nodes(&mut self, paths: &Vec<String>, settings: &Settings) -> Result<(), ActionPerformError> {
+        let mut update_current = false;
 
-        if self.current_wallpaper_path.as_ref().is_some_and(|current_path| *current_path == path) {
+        for path in paths {
+            self.update_node(path, settings);
+            update_current = update_current || self.is_current_wallpaper_path_equals(path);
+        }
+
+        if update_current {
+            let node = self.get_or_insert_node(&self.current_wallpaper_path.clone().unwrap());
+
             match run_backend(&node.borrow()) {
                 Ok(()) => {},
                 Err(err) => {
@@ -245,8 +255,8 @@ impl State {
 
     pub fn remove_nodes(&mut self, paths: &Vec<String>) {
         for path in paths {
-            if self.current_wallpaper_path.as_ref().is_some_and(|current_path| *current_path == *path) {
-                
+            if self.is_current_wallpaper_path_equals(path) {
+                stop_backend();
             }
 
             for (_, group) in &mut self.groups {
@@ -257,15 +267,19 @@ impl State {
         }
     }
 
-    fn update_node(&mut self, path: &String, settings: &Settings) -> SharedWallpaperNode {
+    fn get_or_insert_node(&mut self, path: &str) -> SharedWallpaperNode {
         let path = normalize_path(path);
 
-        let node = self.wallpapers
+        self.wallpapers
             .entry(path.clone())
-            .or_insert_with(|| SharedWallpaperNode::new(path, DisplayMode::new(), 1));
+            .or_insert_with(|| SharedWallpaperNode::new(path, DisplayMode::new(), 1))
+            .clone()
+    }
 
+    fn update_node(&mut self, path: &str, settings: &Settings) -> SharedWallpaperNode {
+        let node = self.get_or_insert_node(path);
         settings.update_node(&mut node.borrow_mut());
-        node.clone()
+        node
     }
 
 
@@ -279,20 +293,20 @@ impl State {
         }
     }
 
-    pub fn get_group_info(&self, name: &String) -> Result<String, ActionPerformError> {
+    pub fn get_group_info(&self, name: &str) -> Result<String, ActionPerformError> {
         match self.groups.get(name) {
             Some(group) => {
                 yaml_serde::to_string(&group.as_dto())
                     .map_err(|err| ActionPerformError::new(err.to_string()))
             }
 
-            None => Err(ActionPerformError::new(format!("Group '{name}' not found")))
+            None => Err(group_not_found_error(name))
         }
     }
 
     pub fn new_group(&mut self, name: impl Into<String>, paths: &Vec<String>) -> Result<(), ActionPerformError> {
         let group_wallpapers = paths.iter()
-            .map(|path| self.update_node(path, &DEFAULT_SETTINGS))
+            .map(|path| self.get_or_insert_node(path))
             .collect::<HashSet<SharedWallpaperNode>>();
 
         self.groups.entry(name.into())
@@ -303,8 +317,12 @@ impl State {
         Ok(())
     }
 
-    pub fn remove_group(&mut self, name: &String) {
-        self.groups.remove(name.into());
+    pub fn set_group(&mut self, name: &str, settings: &Settings) -> Result<String, ActionPerformError> {
+        Ok(String::new())
+    }
+
+    pub fn remove_group(&mut self, name: &str) {
+        self.groups.remove(name);
     }
 
 
@@ -312,7 +330,7 @@ impl State {
         self.new_group(name, paths)
     }
 
-    pub fn remove_from_group(&mut self, name: &String, paths: &Vec<String>) -> Result<(), ActionPerformError> {
+    pub fn remove_from_group(&mut self, name: &str, paths: &Vec<String>) -> Result<(), ActionPerformError> {
         let group = self.get_group_mut(name)?;
 
         for path in paths {
@@ -322,28 +340,29 @@ impl State {
         Ok(())
     }
 
-    pub fn clear_group(&mut self, name: &String) -> Result<(), ActionPerformError> {
+    pub fn clear_group(&mut self, name: &str) -> Result<(), ActionPerformError> {
         self.get_group_mut(name)?.clear();
         Ok(())
     }
 
-    fn get_group_mut(&mut self, name: &String) -> Result<&mut WallpaperGroup, ActionPerformError> {
+    fn get_group_mut(&mut self, name: &str) -> Result<&mut WallpaperGroup, ActionPerformError> {
         self.groups
-            .get_mut(name.into())
-            .ok_or_else(|| ActionPerformError::new(format!("Group '{}' not found", name)))
+            .get_mut(name)
+            .ok_or_else(|| group_not_found_error(name))
     }
 }
 
 
 // ---------------------------------------- Util functions ----------------------------------------
 
-fn normalize_path(src_path: &String) -> String {
-    let path = std::path::absolute(src_path);
+fn group_not_found_error(name: &str) -> ActionPerformError {
+    ActionPerformError::new(format!("Group '{name}' not found"))
+}
 
-    match path {
-        Ok(path) => path.to_str().map_or_else(|| src_path.clone(), String::from),
-        Err(_) => src_path.clone()
-    }
+fn normalize_path(src_path: &str) -> String {
+    std::path::absolute(src_path)
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| src_path.to_string())
 }
 
 

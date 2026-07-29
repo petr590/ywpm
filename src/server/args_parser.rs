@@ -2,6 +2,7 @@ use crate::server::display_mode::{FitMode, HorizontalAlignment, VerticalAlignmen
 use crate::server::args_parse_error::ArgsParseError;
 use crate::server::action::Action;
 use crate::args_parse_error_format;
+use crate::server::time_parser::{parse_duration, parse_time_to_minutes};
 
 #[macro_export]
 macro_rules! GET_HELP_MESSAGE {
@@ -16,7 +17,7 @@ macro_rules! GET_HELP_MESSAGE {
                 get                     Получить путь к текущим обоям
                 set <ПУТЬ>              Установить указанные обои. Если указана папка, то устанавливаются случайные обои из папки
                 random                  Установить случайные обои из всех в списке
-                add <ПУТЬ>              Добавить папку/файл в список и, опционально, настроить параметры (--mode, --recursive-level и т.д.)
+                add <ПУТИ...>           Добавить папку/файл в список и, опционально, настроить параметры (--mode, --recursive-level и т.д.)
                 remove <ПУТИ...>        Удалить папку/файл из списка
 
             ДЕЙСТВИЯ (Группы):
@@ -32,7 +33,8 @@ macro_rules! GET_HELP_MESSAGE {
             ОПЦИИ ВРЕМЕНИ (Для set и set-group):
                 -s, --since <ВРЕМЯ>     Начало действия (по умолчанию: сейчас). Формат: \"14:00\", \"2026-06-11 12:00\"
                 -u, --until <ВРЕМЯ>     Конец действия. Формат: дата/время или длительность (\"+2h\", \"+1d\")
-                -d, --duration <ДЛИТ>   Длительность применения (например: 30m, 40 minutes, 12h, 3d, 2w, now, tomorrow)
+                -d, --duration <ДЛИТ>   Длительность применения (например: 30m, 40 minutes, 12h, 3d, 2w, 5 month, 1 year, 20:30, tomorrow).
+                                        Месяцы и годы считаются по 30 и 365 дней соответственно.
                                         Если опции времени не указаны, обои ставятся только на текущую сессию.
 
             ОБЩИЕ ОПЦИИ:
@@ -55,12 +57,13 @@ macro_rules! GET_HELP_MESSAGE {
 pub fn parse_args(args: &Vec<String>) -> Result<Action, ArgsParseError> {
     let cmd = &args[0];
 
+    let mut allow_options = true;
     let mut action = Action::None;
     let mut iter = args.iter().skip(1);
 
     while let Some(arg) = iter.next() {
 
-        if arg.starts_with("-") {
+        if allow_options && arg.starts_with("-") {
             match arg.as_str() {
                 "-h" | "--help" => {
                     return Ok(Action::Help);
@@ -80,9 +83,11 @@ pub fn parse_args(args: &Vec<String>) -> Result<Action, ArgsParseError> {
                     })?;
                 }
 
-                "-s" | "--since" => {} // TODO
-                "-u" | "--until" => {} // TODO
-                "-d" | "--duration" => {} // TODO
+                "-s" | "--since"    => { parse_time_to_minutes(require_next_arg(iter.next(), arg)?)?; },
+                "-u" | "--until"    => { parse_time_to_minutes(require_next_arg(iter.next(), arg)?)?; },
+                "-d" | "--duration" => { parse_duration(require_next_arg(iter.next(), arg)?)?; },
+
+                "--" => allow_options = false,
 
                 _ => return Err(args_parse_error_format!("Unrecognized option: '{arg}'. Use '{cmd} --help' to get more information"))
             }
@@ -104,11 +109,15 @@ pub fn parse_args(args: &Vec<String>) -> Result<Action, ArgsParseError> {
 }
 
 
-fn parse_u16(str: &String, arg: &String) -> Result<u16, ArgsParseError> {
-    match str.parse() {
-        Ok(value) => Ok(value),
-        Err(_) => Err(args_parse_error_format!("Invalid value for option '{arg}': '{str}'. Expected integer 0..65535"))
-    }
+fn require_next_arg<'a>(arg_value: Option<&'a String>, arg_name: &str) -> Result<&'a String, ArgsParseError> {
+    arg_value.ok_or_else(|| args_parse_error_format!("Expected value for '{arg_name}', got end of arguments"))
+}
+
+
+fn parse_u16(str: &str, arg: &str) -> Result<u16, ArgsParseError> {
+    str.parse().map_err(
+        |_| args_parse_error_format!("Invalid value for option '{arg}': '{str}'. Expected integer 0..65535")
+    )
 }
 
 
