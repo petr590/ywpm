@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{fmt::Display, str::FromStr};
+use std::str::FromStr;
 use serde::{Serialize, Deserialize};
 
 
@@ -15,7 +15,7 @@ pub enum HorizontalAlignment { Left, Center, Right }
 
 pub struct DisplayModeParseError;
 
-impl Display for DisplayModeParseError {
+impl fmt::Display for DisplayModeParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DisplayModeParseError")
     }
@@ -36,6 +36,12 @@ impl DisplayMode {
             h_align: HorizontalAlignment::Center,
             v_align: VerticalAlignment::Center,
         }
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.fit_mode == FitMode::Cover &&
+        self.h_align == HorizontalAlignment::Center &&
+        self.v_align == VerticalAlignment::Center
     }
 
     pub const fn fit_mode(mut self, fit_mode: FitMode) -> Self {

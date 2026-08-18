@@ -1,9 +1,9 @@
 use serde::{Deserialize, Deserializer, Serializer};
 
-use crate::server::display_mode::DisplayMode;
+use crate::daemon::display_mode::DisplayMode;
 
 
-pub fn serialize<S>(mode: &DisplayMode, serializer: S) -> Result<S::Ok, S::Error>
+pub(crate) fn serialize<S>(mode: &DisplayMode, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer
 {
@@ -11,7 +11,7 @@ where
 }
 
 
-pub fn deserialize<'de, D>(deserializer: D) -> Result<DisplayMode, D::Error>
+pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<DisplayMode, D::Error>
 where
     D: Deserializer<'de>
 {

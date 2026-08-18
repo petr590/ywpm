@@ -5,8 +5,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::thread;
 use rand::RngExt;
 
-use ywpm::client::writer::write_string_vec;
-use ywpm::server::reader::read_string_vec;
+use ywpm::{reader, writer};
 
 
 macro_rules! bench_wrapper {
@@ -36,23 +35,23 @@ const SOCKET_PATH: &str = "/tmp/ywpm.socket";
 
 
 fn client_v1(stream: &mut UnixStream, vec: &Vec<String>) -> Result<(), Box<dyn Error>> {
-    write_string_vec(stream, vec)?;
+    writer::write_string_vec(stream, vec)?;
     Ok(())
 }
 
 fn server_v1(stream: &mut UnixStream) -> Result<(), Box<dyn Error>> {
-    read_string_vec(stream)?;
+    reader::read_string_vec(stream)?;
     Ok(())
 }
 
 
 fn client_v2(stream: &mut UnixStream, vec: &Vec<String>) -> Result<(), Box<dyn Error>> {
-    write_string_vec(&mut BufWriter::new(stream), vec)?;
+    writer::write_string_vec(&mut BufWriter::new(stream), vec)?;
     Ok(())
 }
 
 fn server_v2(stream: &mut UnixStream) -> Result<(), Box<dyn Error>> {
-    read_string_vec(&mut BufReader::new(stream))?;
+    reader::read_string_vec(&mut BufReader::new(stream))?;
     Ok(())
 }
 
@@ -65,7 +64,7 @@ fn client_v3(stream: &mut UnixStream, vec: &Vec<String>) -> Result<(), Box<dyn E
     buffer[..4].copy_from_slice(&(size as u32).to_be_bytes());
 
     let mut slice = &mut buffer[4..];
-    write_string_vec(&mut slice, vec)?;
+    writer::write_string_vec(&mut slice, vec)?;
     
     stream.write_all(&buffer)?;
     Ok(())
@@ -80,7 +79,7 @@ fn server_v3(stream: &mut UnixStream) -> Result<(), Box<dyn Error>> {
     stream.read_exact(&mut buffer)?;
 
     let mut slice = &buffer[..];
-    read_string_vec(&mut slice)?;
+    reader::read_string_vec(&mut slice)?;
     Ok(())
 }
 

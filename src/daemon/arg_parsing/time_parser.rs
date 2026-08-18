@@ -2,9 +2,10 @@ use chrono::{DateTime, Days, Duration, Local, NaiveDateTime, NaiveTime, Timelike
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{args_parse_error_format, server::args_parse_error::ArgsParseError};
+use crate::arg_parse_error_localized;
+use crate::daemon::arg_parsing::error::ArgParseError;
 
-fn parse_time(input: &str) -> Result<NaiveDateTime, ArgsParseError> {
+fn parse_time(input: &str) -> Result<NaiveDateTime, ArgParseError> {
     let input = input.trim().to_lowercase();
 
     match input.as_str() {
@@ -37,13 +38,13 @@ fn parse_time(input: &str) -> Result<NaiveDateTime, ArgsParseError> {
 
     
     if input.contains(':') {
-        let time_formats = [
+        let formats = [
             "%H:%M",
             "%H:%M:%S",
             "%H:%M:%S%.f",
         ];
 
-        for fmt in time_formats {
+        for fmt in formats {
             if let Ok(time) = NaiveTime::parse_from_str(&input, fmt) {
                 return Ok(Local::now().date_naive().and_time(time));
             }
@@ -60,11 +61,14 @@ fn parse_time(input: &str) -> Result<NaiveDateTime, ArgsParseError> {
     }
 
 
-    Err(args_parse_error_format!("Invalid date/time value: {}", input))
+    Err(arg_parse_error_localized!(
+        "Invalid date/time value: '{input}'",
+        "Недопустимое значение даты/времени: '{input}'"
+    ))
 }
 
 
-pub fn parse_time_to_minutes(input: &str) -> Result<NaiveDateTime, ArgsParseError> {
+pub(crate) fn parse_time_to_minutes(input: &str) -> Result<NaiveDateTime, ArgParseError> {
     Ok(parse_time(input)?
         .with_second(0).unwrap()
         .with_nanosecond(0).unwrap())
@@ -74,7 +78,7 @@ pub fn parse_time_to_minutes(input: &str) -> Result<NaiveDateTime, ArgsParseErro
 static NUM_AND_UNIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\d+)\s*(\w+)$").unwrap());
 static TIME_REGEX:         Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\d+):(\d{1,2})$").unwrap());
 
-pub fn parse_duration(input: &str) -> Result<Duration, ArgsParseError> {
+pub(crate) fn parse_duration(input: &str) -> Result<Duration, ArgParseError> {
     let input = input.trim().to_lowercase();
 
     if input == "tomorrow" {
@@ -83,7 +87,11 @@ pub fn parse_duration(input: &str) -> Result<Duration, ArgsParseError> {
 
     if let Some(caps) = NUM_AND_UNIT_REGEX.captures(&input) {
         let value: i64 = caps[1].parse()
-            .map_err(|_| args_parse_error_format!("Invalid number: {}", &caps[1]))?;
+            .map_err(|_| arg_parse_error_localized!(
+                "Invalid number: {}",
+                "Недопустимое число: {}",
+                &caps[1]
+            ))?;
 
 
         let unit = &caps[2];
@@ -97,20 +105,34 @@ pub fn parse_duration(input: &str) -> Result<Duration, ArgsParseError> {
                   "month" | "months"         => Duration::days(value * 30),
             "y" | "yr"    | "year" | "years" => Duration::days(value * 365),
 
-            _ => return Err(args_parse_error_format!("Unknown unit: {unit}")),
+            _ => return Err(arg_parse_error_localized!(
+                "Unknown unit: {unit}",
+                "Неизвестная единица измерения: {unit}",
+            )),
         });
     }
 
     if let Some(caps) = TIME_REGEX.captures(&input) {
         let hours: i64 = caps[1].parse()
-            .map_err(|_| args_parse_error_format!("Invalid hours: {}", &caps[1]))?;
+            .map_err(|_| arg_parse_error_localized!(
+                "Invalid hours: {}",
+                "Недопустимое количество часов: {}",
+                &caps[1]
+            ))?;
 
         let minutes: i64 = caps[2].parse().ok()
             .filter(|m| (0..60).contains(m))
-            .ok_or_else(|| args_parse_error_format!("Invalid minutes: {}", &caps[2]))?;
+            .ok_or_else(|| arg_parse_error_localized!(
+                "Invalid minutes: {}",
+                "Недопустимое количество минут: {}",
+                &caps[2]
+            ))?;
 
         return Ok(Duration::hours(hours) + Duration::minutes(minutes));
     }
 
-    Err(args_parse_error_format!("Cannot parse duration: {}", input))
+    Err(arg_parse_error_localized!(
+        "Invalid duration value: {input}",
+        "Недопустимое значение длительности: {input}"
+    ))
 }

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::server::wallpaper_node::SharedWallpaperNode;
-use crate::server::dtos::WallpaperGroupDto;
+use crate::daemon::wallpaper_node::SharedWallpaperNode;
+use crate::daemon::dtos::WallpaperGroupDto;
 
 #[derive(Debug, Clone)]
 pub struct WallpaperGroup {
@@ -14,7 +14,7 @@ impl WallpaperGroup {
         Self { wallpapers: HashSet::new() }
     }
 
-    pub fn from(dto: &WallpaperGroupDto, wallpapers: &HashMap<String, SharedWallpaperNode>) -> Self {
+    pub fn from_dto(dto: &WallpaperGroupDto, wallpapers: &HashMap<String, SharedWallpaperNode>) -> Self {
         Self {
             wallpapers: dto.wallpapers.iter()
                 .map(|path| wallpapers.get(path).cloned())
@@ -28,7 +28,7 @@ impl WallpaperGroup {
 
     pub fn add_all(&mut self, iter: impl IntoIterator<Item = SharedWallpaperNode>) {
         for node in iter {
-            self.wallpapers.insert(node);
+            self.add(node);
         }
     }
 

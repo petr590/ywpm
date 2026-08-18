@@ -4,22 +4,23 @@ version = "0.1.1"
 edition = "2024"
 
 [dependencies]
-yaml_serde = "0.10"
-itertools  = "0.15"
-once_cell  = "1"
-walkdir    = "2"
 chrono     = "0.4"
-regex      = "1"
 indoc      = "2"
-rand       = "0.10"
-serde      = { version = "1",    features = ["derive", "rc"] }
+itertools  = "0.15"
 nix        = { version = "0.31", features = ["poll", "signal"] }
+once_cell  = "1"
 phf        = { version = "0.14", features = ["macros"] }
+rand       = "0.10"
+regex      = "1"
+serde      = { version = "1", features = ["derive", "rc"] }
+serde_with = { version = "3.22", features = ["chrono"] }
+walkdir    = "2"
+yaml_serde = "0.10"
 
 
 [[bin]]
 name = "ywpm-daemon"
-path = "src/server/main.rs"
+path = "src/daemon/main.rs"
 
 [[bin]]
 name = "ywpm"

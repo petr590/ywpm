@@ -1,32 +1,39 @@
 use std::cell::RefCell;
 use std::error::Error;
+use std::path::Path;
 use std::process::{Child, Command};
 
-use crate::server::wallpaper_node::WallpaperNode;
+use indoc::indoc;
+
+use crate::daemon::wallpaper::Wallpaper;
 
 
 thread_local! {
-    static CHILD: RefCell<Option<Child>> = RefCell::new(Option::None);
+    static CHILD: RefCell<Option<Child>> = RefCell::new(None);
 }
 
-pub fn run_backend(node: &WallpaperNode) -> Result<(), Box<dyn Error>> {
-    stop_backend();
+pub fn run(wallpaper: &Wallpaper) -> Result<(), Box<dyn Error>> {
+    assert!(Path::new(wallpaper.path()).is_file());
+
+    stop();
 
     CHILD.with_borrow_mut(|opt| -> Result<(), Box<dyn Error>> {
+        println!("Wallpaper: '{}'", wallpaper.path());
+
         let child = Command::new("mpvpaper")
             .arg("-o")
-            .arg("
+            .arg(indoc! {"
                 --loop=inf --image-display-duration=inf --ao=null
                 --vo=gpu --hwdec=auto --video-sync=display-resample
                 --scale=spline36 --cscale=spline36
                 --stop-screensaver=no --osc=no --config=no
                 video-unscaled=no panscan=1.0 video-align-y=-1
-            ")
+            "})
             .arg("ALL")
-            .arg(node.path())
+            .arg(wallpaper.path())
             .spawn()?;
 
-        *opt = Option::Some(child);
+        *opt = Some(child);
 
         println!("Process 'mpvpaper' started");
         
@@ -37,7 +44,7 @@ pub fn run_backend(node: &WallpaperNode) -> Result<(), Box<dyn Error>> {
 }
 
 
-pub fn stop_backend() {
+pub fn stop() {
     CHILD.with_borrow_mut(|opt| {
         if let Some(child) = opt {
 

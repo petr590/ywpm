@@ -1,11 +1,10 @@
 use std::cell::RefMut;
 
-use crate::server::args_parse_error::ArgsParseError;
-use crate::server::display_mode::DisplayMode;
-use crate::server::wallpaper_node::WallpaperNode;
+use crate::daemon::display_mode::DisplayMode;
+use crate::daemon::wallpaper_node::WallpaperNode;
 
 /// Настройки для WallpaperNode. Каждое значение опционально, так как юзер может задать или не задать определённую настройку.
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Settings {
     pub mode: Option<DisplayMode>,
     pub recursive_level: Option<u16>,
@@ -14,19 +13,13 @@ pub struct Settings {
 impl Settings {
     pub const fn new() -> Self {
         Self {
-            mode:            Option::None,
-            recursive_level: Option::None,
+            mode:            None,
+            recursive_level: None,
         }
     }
 
-    pub fn is_some(&self) -> bool {
-        self.mode.is_some() || self.recursive_level.is_some()
-    }
-
-    pub fn set_mode(&mut self, mode: DisplayMode) -> Result<(), ArgsParseError> {
-        if self.mode.is_some() {
-            return Err(ArgsParseError::new("More then one '--mode' option specified"));
-        }
+    pub fn is_none(&self) -> bool {
+        self.mode.is_none() && self.recursive_level.is_none()
     }
 
     pub fn update_node(&self, node: &mut RefMut<WallpaperNode>) {

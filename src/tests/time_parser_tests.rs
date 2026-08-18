@@ -1,10 +1,11 @@
 use chrono::{Days, Duration, Local, NaiveDate, Timelike};
 
-use crate::server::args_parse_error::ArgsParseError;
-use crate::server::time_parser::{parse_duration, parse_time_to_minutes};
+use crate::assert_is_err;
+use crate::daemon::arg_parsing::error::ArgParseError;
+use crate::daemon::arg_parsing::time_parser::{parse_duration, parse_time_to_minutes};
 
 #[test]
-fn check_time_parses_normally() -> Result<(), ArgsParseError> {
+fn check_time_parses_normally() -> Result<(), ArgParseError> {
     assert_eq!(
         parse_time_to_minutes("now")?,
         Local::now().naive_local()
@@ -55,7 +56,7 @@ fn check_time_parses_fails() {
 
 
 #[test]
-fn check_duration_parses_normally() -> Result<(), ArgsParseError> {
+fn check_duration_parses_normally() -> Result<(), ArgParseError> {
     assert_eq!(parse_duration("2m")?,   Duration::minutes(2));
     assert_eq!(parse_duration("3h")?,   Duration::hours(3));
     assert_eq!(parse_duration("100d")?, Duration::days(100));
@@ -76,5 +77,5 @@ fn check_duration_parses_normally() -> Result<(), ArgsParseError> {
 
 #[test]
 fn check_duration_parse_fails() {
-    assert_eq!(parse_duration("32:64"), Err(ArgsParseError::new("Invalid minutes: 64")));
+    assert_is_err!(parse_duration("32:64"));
 }

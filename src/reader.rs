@@ -1,14 +1,14 @@
 use std::io::{self, Read};
 use std::error::Error;
 
-use crate::server::package_error::PackageError;
+use crate::empty_package_error::EmptyPackageError;
 
 
 pub fn read_string_vec(stream: &mut impl Read) -> Result<Vec<String>, Box<dyn Error>> {
     let size = read_size(stream)?;
 
     if size == 0 {
-        return Err(Box::new(PackageError::EmptyPackage));
+        return Err(Box::new(EmptyPackageError));
     }
 
     let mut vec = Vec::new();

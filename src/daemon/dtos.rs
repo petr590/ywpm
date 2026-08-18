@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 
-use crate::server::wallpaper_node::SharedWallpaperNode;
+use crate::daemon::wallpaper_node::SharedWallpaperNode;
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
