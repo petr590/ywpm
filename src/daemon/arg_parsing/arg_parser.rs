@@ -1,9 +1,11 @@
+use std::str::FromStr;
+
 use crate::{arg_parse_error_localized, arg_parse_error_localized_with_usage};
 use crate::daemon::action::Action;
-use crate::daemon::arg_parsing::action::ArgParseAction;
+use crate::daemon::arg_parsing::action::{ArgParseAction, UniqueOption};
 use crate::daemon::arg_parsing::error::ArgParseError;
 use crate::daemon::arg_parsing::time_parser;
-use crate::daemon::display_mode::{FitMode, HorizontalAlignment, VerticalAlignment, DisplayMode};
+use crate::daemon::display_mode::DisplayMode;
 
 #[macro_export]
 macro_rules! GET_HELP_MESSAGE {
@@ -34,14 +36,15 @@ macro_rules! GET_HELP_MESSAGE {
 
                 ОПЦИИ ВРЕМЕНИ (Для set и set-group):
                     -s, --since <ВРЕМЯ>     Начало действия (по умолчанию: сейчас). Формат: \"14:00\", \"2026-06-11 12:00\"
-                    -u, --until <ВРЕМЯ>     Конец действия. Формат: дата/время или длительность (\"+2h\", \"+1d\")
+                    -u, --until <ВРЕМЯ>     Конец действия. Формат: дата/время
                     -d, --duration <ДЛИТ>   Длительность применения (например: 30m, 40 minutes, 12h, 3d, 2w, 5 month, 1 year, 20:30, tomorrow).
                                             Месяцы и годы считаются по 30 и 365 дней соответственно.
-                                            Если опции времени не указаны, обои ставятся только на текущую сессию.
+                    
+                    Если опции времени не указаны, обои ставятся только на текущую сессию.
 
                 ОБЩИЕ ОПЦИИ:
                     -m, --mode <РЕЖИМ>  Установить режим отображения обоев. По умолчанию: \"cover center\".
-                                    Сторона, к которой будут «прилипать» обои: left, right, top, bottom, vcenter, hcenter, center
+                                    Сторона, к которой будут «прилипать» обои: left, right, top, bottom, center
                                     Отрисовка изображения:
                                     - cover - изображение выходит за границы экрана без искажения пропорций
                                     - contain - изображение полностью помещается в экран без искажения пропорций
@@ -80,14 +83,15 @@ macro_rules! GET_HELP_MESSAGE {
 
                 TIME OPTIONS (For set and set-group):
                     -s, --since <TIME>     Start of action (default: now). Format: \"14:00\", \"2026-06-11 12:00\"
-                    -u, --until <TIME>     End of action. Format: date/time or duration (\"+2h\", \"+1d\")
+                    -u, --until <TIME>     End of action. Format: date/time
                     -d, --duration <DURATION>   Duration of application (e.g.: 30m, 40 minutes, 12h, 3d, 2w, 5 month, 1 year, 20:30, tomorrow).
                                                 Months and years are counted as 30 and 365 days, respectively.
-                                                If no time options are specified, the wallpaper is set only for the current session.
+                    
+                    If no time options are specified, the wallpaper is set only for the current session.
 
                 GENERAL OPTIONS:
                     -m, --mode <MODE>  Set the wallpaper display mode. Default: \"cover center\".
-                                    The side to which the wallpaper will “stick”: left, right, top, bottom, vcenter, hcenter, center
+                                    The side to which the wallpaper will “stick”: left, right, top, bottom, center
                                     Image rendering:
                                     - cover — the image extends beyond the screen boundaries without distorting proportions
                                     - contain — the image fits entirely within the screen without distorting proportions
@@ -160,6 +164,10 @@ pub fn parse_args(args: &Vec<String>) -> Result<Action, ArgParseError> {
                     )?;
                 },
 
+                "--display-id" => {
+                    action.add_unique_option(arg.clone(), UniqueOption::DisplayId(parse_u32(opt_name, require_opt_value(opt_name, iter.next())?)?))?;
+                }
+
                 "--" => allow_options = false,
 
                 _ => return Err(arg_parse_error_localized_with_usage!(
@@ -187,44 +195,30 @@ fn require_opt_value<'a>(opt_name: &str, opt_value: Option<&'a String>) -> Resul
 }
 
 
-fn parse_u16(opt_name: &str, opt_value: &str) -> Result<u16, ArgParseError> {
-    opt_value.parse().map_err(
+fn parse_display_mode(opt_name: &str, opt_value: &str) -> Result<DisplayMode, ArgParseError> {
+    DisplayMode::from_str(opt_value).map_err(
         |_| arg_parse_error_localized!(
-            "Invalid value for option '{opt_name}': '{opt_value}'. Expected integer from 0 to 65535",
-            "Недопустимое значение для параметра '{opt_name}': '{opt_value}'. Ожидается целое число от 0 до 65535"
+            "Invalid value for option '{opt_name}': '{opt_value}'",
+            "Недопустимое значение для параметра '{opt_name}': '{opt_value}'"
         )
     )
 }
 
 
-fn parse_display_mode(opt_name: &str, opt_value: &str) -> Result<DisplayMode, ArgParseError> {
-    let mut mode = DisplayMode::new();
+fn parse_u16(opt_name: &str, opt_value: &str) -> Result<u16, ArgParseError> {
+    opt_value.parse().map_err(
+        |_| arg_parse_error_localized!(
+            "Invalid value for option '{opt_name}': '{opt_value}'. Expected integer from 0 to 65 535",
+            "Недопустимое значение для параметра '{opt_name}': '{opt_value}'. Ожидается целое число от 0 до 65 535"
+        )
+    )
+}
 
-    for token in opt_value.split(" ") {
-        match token {
-            "cover"   => mode.fit_mode = FitMode::Cover,
-            "contain" => mode.fit_mode = FitMode::Contain,
-            "stretch" => mode.fit_mode = FitMode::Stretch,
-
-            "left"    => mode.h_align = HorizontalAlignment::Left,
-            "hcenter" => mode.h_align = HorizontalAlignment::Center,
-            "right"   => mode.h_align = HorizontalAlignment::Right,
-
-            "top"     => mode.v_align = VerticalAlignment::Top,
-            "vcenter" => mode.v_align = VerticalAlignment::Center,
-            "bottom"  => mode.v_align = VerticalAlignment::Bottom,
-
-            "center" => {
-                mode.h_align = HorizontalAlignment::Center;
-                mode.v_align = VerticalAlignment::Center;
-            }
-
-            _ => return Err(arg_parse_error_localized!(
-                "Invalid value for option '{opt_name}': '{token}'",
-                "Недопустимое значение для параметра '{opt_name}': '{opt_value}'"
-            ))
-        }
-    }
-
-    Ok(mode)
+fn parse_u32(opt_name: &str, opt_value: &str) -> Result<u32, ArgParseError> {
+    opt_value.parse().map_err(
+        |_| arg_parse_error_localized!(
+            "Invalid value for option '{opt_name}': '{opt_value}'. Expected integer from 0 to 4 294 967 295",
+            "Недопустимое значение для параметра '{opt_name}': '{opt_value}'. Ожидается целое число от 0 до 4 294 967 295"
+        )
+    )
 }

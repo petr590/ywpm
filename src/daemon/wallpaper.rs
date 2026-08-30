@@ -1,5 +1,7 @@
-use crate::daemon::{display_mode::DisplayMode, wallpaper_node::WallpaperNode};
+use crate::daemon::display_mode::DisplayMode;
+use crate::daemon::wallpaper_node::WallpaperNode;
 
+#[derive(Debug, PartialEq)]
 pub struct Wallpaper {
     path: String,
     mode: DisplayMode,
@@ -24,5 +26,9 @@ impl Wallpaper {
 
     pub fn path(&self) -> &String {
         &self.path
+    }
+
+    pub fn mode(&self) -> &DisplayMode {
+        &self.mode
     }
 }

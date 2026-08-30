@@ -6,7 +6,7 @@ use chrono::{Days, Local, NaiveDate, Timelike};
 use crate::assert_is_err;
 use crate::daemon::action::Action;
 use crate::daemon::arg_parsing::arg_parser::parse_args;
-use crate::daemon::display_mode::{DisplayMode, FitMode, HorizontalAlignment, VerticalAlignment};
+use crate::daemon::display_mode::{DisplayMode, FitMode, AlignX, AlignY};
 use crate::daemon::settings::Settings;
 use crate::daemon::time_period::TimePeriod;
 use crate::util;
@@ -53,8 +53,8 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
                 recursive_level: Some(3),
                 mode: Some(DisplayMode {
                     fit_mode: FitMode::Contain,
-                    h_align: HorizontalAlignment::Right,
-                    v_align: VerticalAlignment::Top,
+                    align_x: AlignX::Right,
+                    align_y: AlignY::Top,
                 }),
             },
             period: None
@@ -69,8 +69,8 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
                 recursive_level: None,
                 mode: Some(DisplayMode {
                     fit_mode: FitMode::Cover,
-                    h_align: HorizontalAlignment::Center,
-                    v_align: VerticalAlignment::Top,
+                    align_x: AlignX::Center,
+                    align_y: AlignY::Top,
                 }),
             }
         }

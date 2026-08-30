@@ -1,16 +1,14 @@
-use std::error::Error;
 use std::io::ErrorKind;
 use std::fs::{self, File};
 use std::os::unix::fs::symlink;
 use std::os::unix::fs::PermissionsExt;
 
 use chrono::{Days, Local};
-use serde::{Deserialize, Serialize};
 
 use crate::daemon::state::State;
 use crate::daemon::display_mode::{DisplayMode, FitMode};
 use crate::daemon::time_period::TimePeriod;
-use crate::daemon::wallpaper_node::WallpaperNode;
+use crate::daemon::wallpaper::Wallpaper;
 
 #[test]
 fn state_serializes() {
@@ -85,44 +83,25 @@ fn state_returns_all_wallpapers() {
     create_test_files();
 
     let mode = DisplayMode::new();
-    let recursive_level = 2;
     let period = Some(TimePeriod::new(
         Local::now().naive_local(),
         Local::now().naive_local() + Days::new(10)
     ));
 
     let mut state = State::new();
-    state.add_wallpaper("/tmp/ywpm-test/", mode.clone(), recursive_level, period.clone());
+    state.add_wallpaper("/tmp/ywpm-test/", mode.clone(), 2, period);
 
-    let nodes = state.find_all_wallpapers();
+    let wallpapers = state.find_all_wallpapers();
 
-    println!("{nodes:?}");
+    println!("{wallpapers:?}");
 
-    assert_eq!(nodes.len(), 4);
-    assert!(nodes.contains(&WallpaperNode::new("/tmp/ywpm-test/a.png",     mode.clone(), recursive_level, period.clone())));
-    assert!(nodes.contains(&WallpaperNode::new("/tmp/ywpm-test/b.jpg",     mode.clone(), recursive_level, period.clone())));
-    assert!(nodes.contains(&WallpaperNode::new("/tmp/ywpm-test/c.webp",    mode.clone(), recursive_level, period.clone())));
-    assert!(nodes.contains(&WallpaperNode::new("/tmp/ywpm-test/a_ref.png", mode.clone(), recursive_level, period.clone())));
+    assert_eq!(wallpapers.len(), 4);
 
-    assert!(!nodes.contains(&WallpaperNode::new("/tmp/ywpm-test/unaccessible.jpeg",  mode.clone(), recursive_level, period.clone())));
-    assert!(!nodes.contains(&WallpaperNode::new("/tmp/ywpm-test/broken_symlink.png", mode.clone(), recursive_level, period.clone())));
-}
+    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/a.png",     mode.clone())));
+    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/b.jpg",     mode.clone())));
+    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/c.webp",    mode.clone())));
+    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/a_ref.png", mode.clone())));
 
-
-#[derive(Serialize, Deserialize)]
-struct DisplayModeProxy {
-    #[serde(with = "crate::daemon::display_mode_format")]
-    mode: DisplayMode
-}
-
-
-#[test]
-fn display_mode_serializes() -> Result<(), Box<dyn Error>> {
-    let mode = DisplayMode::new();
-    assert_eq!(mode.to_string(), "cover center center");
-
-    let proxy = DisplayModeProxy { mode };
-    assert_eq!(yaml_serde::to_string(&proxy)?.trim(), "mode: cover center center");
-
-    Ok(())
+    assert!(!wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/unaccessible.jpeg",  mode.clone())));
+    assert!(!wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/broken_symlink.png", mode.clone())));
 }

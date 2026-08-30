@@ -1,3 +1,4 @@
+use crate::daemon::find_non_fitting_wallpapers;
 use crate::{GET_HELP_MESSAGE, action_perform_error_localized};
 use crate::daemon::time_period::TimePeriod;
 use crate::daemon::action_perform_error::ActionPerformError;
@@ -26,29 +27,12 @@ pub enum Action {
     RemoveFromGroup { name: String, paths: Vec<String> },
     ClearGroup      { name: String },
     RemoveGroup     { name: String },
+
+    FindNonFittingWallpapers { paths: Vec<String>, display_id: Option<u32> },
 }
 
 impl Action {
-    pub fn get_name(&self) -> &str {
-        match self {
-            Help               { .. } => "help",
-            GetWallpaperList   { .. } => "list",
-            GetWallpaper       { .. } => "get",
-            SetWallpaper       { .. } => "set",
-            SetRandowWallpaper { .. } => "random",
-            AddNodes           { .. } => "add",
-            RemoveNodes        { .. } => "remove",
-            GetGroupList       { .. } => "group-list",
-            NewGroup           { .. } => "new-group",
-            GetGroup           { .. } => "get-group",
-            SetGroup           { .. } => "set-group",
-            AddToGroup         { .. } => "add-to-group",
-            RemoveFromGroup    { .. } => "remove-from-group",
-            ClearGroup         { .. } => "clear-group",
-            RemoveGroup        { .. } => "remove-group",
-        }
-    }
-
+    
     pub fn perform(self, cmd: &str, state: &mut State) -> Result<String, ActionPerformError> {
         match self {
             Help => return Ok(GET_HELP_MESSAGE!(cmd)),
@@ -71,11 +55,13 @@ impl Action {
             GetGroupList                                => return Ok(state.get_group_list()),
             GetGroup         { name }                   => return state.get_group_info(&name),
             NewGroup         { name, paths }            => state.new_group(name, &paths)?,
-            SetGroup         { name, settings, period } => return state.set_group(&name, &settings, &period),
+            SetGroup         { name, settings, period } => return state.set_group(&name, &settings, period),
             AddToGroup       { name, paths }            => state.add_to_group(name, &paths)?,
             RemoveFromGroup  { name, paths }            => state.remove_from_group(&name, &paths)?,
             ClearGroup       { name }                   => state.clear_group(&name)?,
             RemoveGroup      { name }                   => state.remove_group(&name),
+
+            FindNonFittingWallpapers { paths, display_id } => return find_non_fitting_wallpapers::run(paths, display_id),
         }
 
         Ok(String::new())

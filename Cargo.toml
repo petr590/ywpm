@@ -4,7 +4,10 @@ version = "0.1.1"
 edition = "2024"
 
 [dependencies]
-chrono     = "0.4"
+chrono     = { version = "0.4", features = ["alloc", "unstable-locales"] }
+display-info = "0.5.9"
+ffprobe = "0.4.0"
+imagesize = "0.15.0"
 indoc      = "2"
 itertools  = "0.15"
 nix        = { version = "0.31", features = ["poll", "signal"] }

@@ -4,7 +4,9 @@ use std::error::Error;
 use std::fs::{self, File, Metadata};
 use std::path::Path;
 
+use chrono::{Local, NaiveDateTime};
 use itertools::Itertools;
+use nix::poll::PollTimeout;
 use phf::{Set, phf_set};
 use rand::random_range;
 use walkdir::WalkDir;
@@ -19,14 +21,15 @@ use crate::daemon::time_period::TimePeriod;
 use crate::daemon::wallpaper::Wallpaper;
 use crate::daemon::wallpaper_group::WallpaperGroup;
 use crate::daemon::wallpaper_node::{WallpaperNode, SharedWallpaperNode};
+use crate::daemon::warning::Warning;
 
 
 
 #[derive(Debug, Clone)]
 pub struct State {
     current_wallpaper_path: Option<String>,
-    wallpapers: HashMap<String, SharedWallpaperNode>,
-    groups:     HashMap<String, WallpaperGroup>,
+    nodes:  HashMap<String, SharedWallpaperNode>,
+    groups: HashMap<String, WallpaperGroup>,
 }
 
 
@@ -37,25 +40,25 @@ impl State {
     pub fn new() -> Self {
         Self {
             current_wallpaper_path: None,
-            wallpapers: HashMap::new(),
-            groups:     HashMap::new(),
+            nodes:  HashMap::new(),
+            groups: HashMap::new(),
         }
     }
 
     pub fn from_dto(dto: StateDto) -> Self {
-        let wallpapers = dto.wallpapers.into_iter()
+        let nodes = dto.nodes.into_iter()
                 .map(|node| {
                     let path = node.borrow().path().clone();
                     (path, node)
                 }).collect();
 
         let groups = dto.groups.into_iter()
-                .map(|(name, group_dto)| (name, WallpaperGroup::from_dto(&group_dto, &wallpapers)))
+                .map(|(name, group_dto)| (name, WallpaperGroup::from_dto(group_dto, &nodes)))
                 .collect();
 
         Self {
             current_wallpaper_path: dto.current_wallpaper_path.clone(),
-            wallpapers,
+            nodes,
             groups,
         }
     }
@@ -64,7 +67,7 @@ impl State {
         StateDto {
             current_wallpaper_path: self.current_wallpaper_path.clone(),
 
-            wallpapers: self.wallpapers.iter()
+            nodes: self.nodes.iter()
                 .map(|(_path, node)| node.clone())
                 .collect(),
             
@@ -114,7 +117,7 @@ impl State {
     pub(crate) fn add_wallpaper(&mut self, path: impl Into<String>, mode: DisplayMode, recursive_level: u16, period: Option<TimePeriod>) -> &mut SharedWallpaperNode {
         let path = path.into();
 
-        self.wallpapers.entry(path.clone())
+        self.nodes.entry(path.clone())
             .or_insert(SharedWallpaperNode::new(path, mode, recursive_level, period))
     }
 
@@ -127,21 +130,16 @@ impl State {
 
     #[cfg(test)]
     pub(crate) fn find_all_wallpapers(&self) -> Vec<Wallpaper> {
-        find_all_child_files(self.wallpapers.values()).0
+        self.find_all_child_files(self.nodes.values()).0
     }
 
 
-    // ----------------------------------------- Backend ------------------------------------------
+    // ---------------------------------------- Wallpapers ----------------------------------------
 
-    pub fn start_backend(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn restore_wallpaper(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(current_path) = &self.current_wallpaper_path {
 
-            let opt_node = self.wallpapers.iter()
-                    .filter_map(|(path, node)| if current_path.starts_with(path) { Some(node) } else { None })
-                    .min_by_key(|node| node.borrow().path().len())
-                    .cloned();
-
-            let node = match opt_node {
+            let node = match self.find_closest_node(current_path) {
                 Some(node) => {
                     let node = node.borrow();
                     SharedWallpaperNode::new(
@@ -155,11 +153,8 @@ impl State {
                 None => self.get_or_insert_node(&current_path.clone())
             };
 
-            let (nodes, warning) = find_all_child_files([&node]);
-
-            if !warning.is_empty() {
-                eprintln!("{warning}");
-            }
+            let (nodes, warning) = self.find_all_child_files([&node]);
+            eprint!("{warning}");
 
             self.run_backend_with_random_wallpaper(&nodes)?;
         }
@@ -168,14 +163,12 @@ impl State {
     }
 
 
-    // ---------------------------------------- Wallpapers ----------------------------------------
-
     pub fn get_wallpaper_list(&self) -> String {
-        if self.wallpapers.is_empty() {
+        if self.nodes.is_empty() {
             String::from("No wallpapers are found")
         } else {
             format!("Wallpapers:\n{}",
-                    self.wallpapers.values()
+                    self.nodes.values()
                         .map(|node| node.borrow().path().clone())
                         .format("\n")
             )
@@ -188,40 +181,34 @@ impl State {
 
     pub fn set_wallpaper(&mut self, path: impl Into<String>, settings: &Settings, period: Option<TimePeriod>) -> Result<String, ActionPerformError> {
         let path = path.into();
-        let node = self.update_node(&path, settings, period);
-
-        let (nodes, warning) = find_all_child_files([&node]);
-
-        let node = self.run_backend_with_random_wallpaper(&nodes)
-                .map_err(ActionPerformError::from_unknown_error)?;
-
-        match backend::run(&node) {
-            Ok(()) => {
-                self.current_wallpaper_path = Some(path);
-                Ok(format_localized!(
-                    "{}Wallpaper set: '{}'",
-                    "{}Установлены обои: '{}'",
-                    append_ln_if_not_empty(warning), node.path()
-                ))
-            },
-            Err(err) => {
-                self.current_wallpaper_path = None;
-                Err(ActionPerformError::from_unknown_error(err))
-            }
+        let node = self.update_node(&path, settings, period.clone());
+        
+        if period.as_ref().is_none_or(|period| period.is_datetime_in_bounds(&Local::now().naive_local())) {
+            self.set_node([&node])
+        } else {
+            Ok(format_localized!(
+                "The wallpaper is scheduled for the {}: '{}'",
+                "Установка обоев запланирована на период {}: '{}'",
+                period.unwrap(), path
+            ))
         }
     }
 
     pub fn set_random_wallpaper(&mut self) -> Result<String, ActionPerformError> {
+        self.set_node(self.find_actual_nodes().iter())
+    }
 
-        let (nodes, warning) = find_all_child_files(self.wallpapers.values());
+
+    fn set_node<'a>(&mut self, nodes: impl IntoIterator<Item = &'a SharedWallpaperNode>) -> Result<String, ActionPerformError> {
+        let (nodes, warning) = self.find_all_child_files(nodes);
 
         let node = self.run_backend_with_random_wallpaper(&nodes)
-                .map_err(ActionPerformError::from_unknown_error)?;
+                .map_err(ActionPerformError::from_boxed)?;
 
         Ok(format_localized!(
             "{}Wallpaper set: '{}'",
             "{}Установлены обои: '{}'",
-            append_ln_if_not_empty(warning), node.path()
+            warning, node.path()
         ))
     }
 
@@ -270,7 +257,7 @@ impl State {
 
             backend::run(&Wallpaper::from(&*node.borrow())).map_err(|err| {
                 self.current_wallpaper_path = None;
-                ActionPerformError::from_unknown_error(err)
+                ActionPerformError::from_boxed(err)
             })?;
         }
 
@@ -289,12 +276,12 @@ impl State {
                 group.remove(path);
             }
 
-            self.wallpapers.remove(path);
+            self.nodes.remove(path);
         }
     }
 
     fn get_or_insert_node(&mut self, path: &str) -> SharedWallpaperNode {
-        self.wallpapers
+        self.nodes
             .entry(String::from(path))
             .or_insert_with(|| SharedWallpaperNode::new(path, DisplayMode::new(), 1, None))
             .clone()
@@ -341,20 +328,23 @@ impl State {
     }
 
     pub fn new_group(&mut self, name: impl Into<String>, paths: &Vec<String>) -> Result<(), ActionPerformError> {
-        let group_wallpapers = paths.iter()
+        let group_nodes = paths.iter()
             .map(|path| self.get_or_insert_node(path))
             .collect::<HashSet<SharedWallpaperNode>>();
 
         self.groups.entry(name.into())
             .or_insert_with(WallpaperGroup::new)
-            .add_all(group_wallpapers);
+            .add_all(group_nodes);
 
 
         Ok(())
     }
 
-    pub fn set_group(&mut self, _name: &str, _settings: &Settings, _peroid: &Option<TimePeriod>) -> Result<String, ActionPerformError> {
-        Ok(String::new())
+    pub fn set_group(&mut self, name: &str, _settings: &Settings, period: Option<TimePeriod>) -> Result<String, ActionPerformError> {
+        let group = self.get_group_mut(name)?;
+        group.period = period;
+
+        todo!()
     }
 
     pub fn remove_group(&mut self, name: &str) {
@@ -386,10 +376,153 @@ impl State {
             .get_mut(name)
             .ok_or_else(|| group_not_found_error(name))
     }
+
+
+    // -------------------------------------- Util functions --------------------------------------
+
+
+    fn find_actual_nodes(&self) -> Vec<SharedWallpaperNode> {
+        let now = Local::now().naive_local();
+
+        let nodes = self.nodes.values()
+            .filter(|node| node.borrow().period.as_ref().is_some_and(|period| period.is_datetime_in_bounds(&now)));
+
+        let group_nodes = self.groups.values()
+            .filter(|group| group.period.as_ref().is_some_and(|period| period.is_datetime_in_bounds(&now)))
+            .flat_map(|group| group.nodes());
+
+        let vec = nodes.chain(group_nodes)
+            .cloned().unique()
+            .collect::<Vec<SharedWallpaperNode>>();
+
+        if vec.is_empty() {
+            self.nodes.values().cloned().collect()
+        } else {
+            vec
+        }
+    }
+
+
+    fn find_all_child_files<'a>(&self, nodes: impl IntoIterator<Item = &'a SharedWallpaperNode>) -> (Vec<Wallpaper>, Warning) {
+        let mut paths = Vec::new();
+        let mut warning = Warning::new();
+
+        for rc in nodes {
+            let node = rc.borrow();
+            let path = Path::new(node.path());
+
+            match fs::metadata(path) {
+                Ok(metadata) => self.add_all_child_files(&mut paths, &mut warning, node, metadata),
+                Err(err) => warning.append_msg_error_path("couldn't get file metadata", &err, node.path()),
+            }
+        }
+
+        (paths, warning)
+    }
+
+
+
+    fn add_all_child_files(&self, paths: &mut Vec<Wallpaper>, warning: &mut Warning, current_node: Ref<WallpaperNode>, metadata: Metadata) {
+        let path = Path::new(current_node.path());
+
+        if metadata.is_file() && ext_matches(path) && check_accessible(path, warning) {
+            paths.push(Wallpaper::from(&*current_node));
+            return;
+        }
+        
+        if metadata.is_dir() {
+            let walk_dir = WalkDir::new(path)
+                    .follow_links(true)
+                    .same_file_system(false)
+                    .max_depth(current_node.recursive_level as usize);
+
+            for entry in walk_dir {
+                match entry {
+
+                    Ok(dir_entry) => {
+                        if dir_entry.file_type().is_file() && ext_matches(dir_entry.path()) && check_accessible(dir_entry.path(), warning) {
+                            let path = dir_entry.path().to_str().unwrap_or_default();
+
+                            paths.push(Wallpaper::new(
+                                String::from(path),
+                                self.find_closest_node(path)
+                                    .map(|node| node.borrow().mode.clone())
+                                    .unwrap_or_else(|| current_node.mode.clone())
+                            ));
+                        }
+                    }
+
+                    Err(err) => {
+                        if err.io_error().is_some() {
+                            warning.append_msg_error_path("I/O error", &err, current_node.path());
+
+                        } else {
+                            warning.append_msg_error("Walkdir error", &err);
+                        }
+                    }
+                }
+            }
+
+            return;
+        }
+    }
+
+    fn find_closest_node(&self, path: &str) -> Option<SharedWallpaperNode> {
+        self.nodes.values()
+            .filter(|node| path.starts_with(node.borrow().path()))
+            .max_by_key(|node| node.borrow().path().len())
+            .cloned()
+    }
+
+
+    // ------------------------------------------ Other -------------------------------------------
+
+    pub fn get_timeout(&self) -> PollTimeout {
+        let now = Local::now().naive_local();
+
+        let time = self.nodes.values()
+            .filter_map(
+                |node| node.borrow().period.as_ref()
+                    .map(|peroid| peroid.since.clone())
+                    .filter(|time| *time > now)
+            ).min();
+
+        if let Some(time) = time {
+            let duration: Result<i32, _> = (time - now).num_milliseconds().try_into();
+
+            match duration {
+                Ok(num) => PollTimeout::try_from(num).unwrap(),
+                Err(_) => PollTimeout::MAX
+            }
+
+        } else {
+            PollTimeout::NONE
+        }
+    }
+
+    pub fn clear_expired_peroids(&mut self) {
+        let now = Local::now().naive_local();
+
+        for node in self.nodes.values_mut() {
+            clear_period_if_expired(&mut node.borrow_mut().period, &now);
+        }
+
+        for group in self.groups.values_mut() {
+            clear_period_if_expired(&mut group.period, &now);
+        }
+    }
 }
 
 
 // ---------------------------------------- Util functions ----------------------------------------
+
+
+fn clear_period_if_expired(period: &mut Option<TimePeriod>, now: &NaiveDateTime) {
+    if period.as_ref().is_some_and(|period| period.is_expired(now)) {
+        *period = None;
+    }
+}
+
 
 fn group_not_found_error(name: &str) -> ActionPerformError {
     action_perform_error_localized!(
@@ -400,108 +533,25 @@ fn group_not_found_error(name: &str) -> ActionPerformError {
 
 
 
-fn find_all_child_files<'a>(nodes: impl IntoIterator<Item = &'a SharedWallpaperNode>) -> (Vec<Wallpaper>, String) {
-    let mut paths = Vec::new();
-    let mut warning = String::new();
-
-    for rc in nodes {
-        let node = rc.borrow();
-        let path = Path::new(node.path());
-
-        match fs::metadata(path) {
-            Ok(metadata) => add_all_child_files(&mut paths, &mut warning, node, metadata),
-            Err(err) => append_to_warning(&mut warning, "couldn't get file metadata", err, node.path()),
-        }
-    }
-
-    (paths, warning)
-}
-
-
-
-fn add_all_child_files(paths: &mut Vec<Wallpaper>, warning: &mut String, current_node: Ref<WallpaperNode>, metadata: Metadata) {
-    let path = Path::new(current_node.path());
-
-    if metadata.is_file() && ext_matches(path) && check_accessible(path, warning) {
-        paths.push(Wallpaper::from(&*current_node));
-        return;
-    }
-    
-    if metadata.is_dir() {
-        let walk_dir = WalkDir::new(path)
-                .follow_links(true)
-                .same_file_system(false)
-                .max_depth(current_node.recursive_level as usize);
-
-        for entry in walk_dir {
-            match entry {
-                Ok(dir_entry) => {
-                    if dir_entry.file_type().is_file() && ext_matches(dir_entry.path()) && check_accessible(dir_entry.path(), warning) {
-                        paths.push(Wallpaper::new(
-                            String::from(dir_entry.path().to_str().unwrap_or_default()),
-                            current_node.mode.clone() // TODO find closest node
-                        ));
-                    }
-                }
-
-                Err(err) => {
-                    if err.io_error().is_some() {
-                        append_to_warning(warning, "I/O error", err, current_node.path());
-
-                    } else {
-                        warning.push_str("Warning: ");
-                        warning.push_str(&err.to_string());
-                        warning.push_str("'\n");
-                    }
-                }
-            }
-        }
-
-        return;
-    }
-}
-
-
-
 static EXTENSIONS: Set<&str> = phf_set! {
     "jpg", "jpeg", "png", "apng", "webp", "gif", "bmp", "tiff", "tif", "ico", "heic", "heif", "avif",
     "mp4", "m4v", "mkv", "avi", "mov", "webm", "flv", "wmv",
 };
 
 fn ext_matches(path: impl AsRef<Path>) -> bool {
-    let ext = path.as_ref()
-        .extension().unwrap_or_default()
-        .to_str().unwrap_or_default();
-
-    return EXTENSIONS.contains(ext);
+    path.as_ref().extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| EXTENSIONS.contains(ext))
 }
 
-fn check_accessible(path: impl AsRef<Path>, warning: &mut String) -> bool {
+fn check_accessible(path: impl AsRef<Path>, warning: &mut Warning) -> bool {
     let path_ref = path.as_ref();
 
     match File::open(path_ref) {
         Ok(_) => true,
         Err(err) => {
-            append_to_warning(warning, "couldn't open file", err, path_ref.to_str().unwrap_or_default());
+            warning.append_msg_error_path("couldn't open file", &err, path_ref.to_str().unwrap_or_default());
             false
         },
     }
-}
-
-fn append_to_warning(warning: &mut String, message: impl AsRef<str>, err: impl Error, path: impl AsRef<str>) {
-    warning.push_str("Warning: ");
-    warning.push_str(message.as_ref());
-    warning.push_str(": ");
-    warning.push_str(&err.to_string());
-    warning.push_str(": '");
-    warning.push_str(path.as_ref());
-    warning.push_str("'\n");
-}
-
-fn append_ln_if_not_empty(mut s: String) -> String {
-    if !s.is_empty() {
-        s.push('\n');
-    }
-
-    s
 }

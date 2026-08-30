@@ -121,7 +121,7 @@ pub(crate) fn parse_duration(input: &str) -> Result<Duration, ArgParseError> {
             ))?;
 
         let minutes: i64 = caps[2].parse().ok()
-            .filter(|m| (0..60).contains(m))
+            .filter(|mins| (0..60).contains(mins))
             .ok_or_else(|| arg_parse_error_localized!(
                 "Invalid minutes: {}",
                 "Недопустимое количество минут: {}",

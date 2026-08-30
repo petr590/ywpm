@@ -58,7 +58,7 @@ impl WallpaperNode {
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
 pub struct SharedWallpaperNode(Rc<RefCell<WallpaperNode>>);
 
 impl PartialEq for SharedWallpaperNode {
@@ -66,8 +66,6 @@ impl PartialEq for SharedWallpaperNode {
         Rc::as_ptr(&self.0) == Rc::as_ptr(&other.0)
     }
 }
-
-impl Eq for SharedWallpaperNode {}
 
 impl Hash for SharedWallpaperNode {
     fn hash<H: Hasher>(&self, state: &mut H) {

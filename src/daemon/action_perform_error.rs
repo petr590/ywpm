@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
@@ -5,7 +6,7 @@ pub struct ActionPerformError {
     message: String
 }
 
-impl std::error::Error for ActionPerformError {}
+impl Error for ActionPerformError {}
 
 impl fmt::Display for ActionPerformError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -18,7 +19,7 @@ impl ActionPerformError {
         Self { message: message.into() }
     }
 
-    pub fn from_unknown_error(error: Box<dyn std::error::Error>) -> Self {
+    pub fn from_boxed(error: Box<dyn Error>) -> Self {
         match error.downcast::<ActionPerformError>() {
             Ok(action_perform_error) => *action_perform_error,
             Err(error) => ActionPerformError::new(error.to_string())

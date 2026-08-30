@@ -12,7 +12,7 @@ pub struct ArgParseTimePeriod {
 }
 
 impl ArgParseTimePeriod {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             since:    None,
             until:    None,
@@ -20,7 +20,7 @@ impl ArgParseTimePeriod {
         }
     }
 
-    pub fn is_none(&self) -> bool {
+    pub const fn is_none(&self) -> bool {
         self.since.is_none() &&
         self.until.is_none() &&
         self.duration.is_none()

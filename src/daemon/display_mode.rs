@@ -7,12 +7,13 @@ use serde::{Serialize, Deserialize};
 pub enum FitMode { Cover, Contain, Stretch }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum VerticalAlignment { Top, Center, Bottom }
+pub enum AlignX { Left, Center, Right }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum HorizontalAlignment { Left, Center, Right }
+pub enum AlignY { Top, Center, Bottom }
 
 
+#[derive(Debug)]
 pub struct DisplayModeParseError;
 
 impl fmt::Display for DisplayModeParseError {
@@ -25,23 +26,27 @@ impl fmt::Display for DisplayModeParseError {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct DisplayMode {
     pub fit_mode: FitMode,
-    pub h_align: HorizontalAlignment,
-    pub v_align: VerticalAlignment,
+    pub align_x: AlignX,
+    pub align_y: AlignY,
 }
 
 impl DisplayMode {
     pub const fn new() -> Self {
         Self {
             fit_mode: FitMode::Cover,
-            h_align: HorizontalAlignment::Center,
-            v_align: VerticalAlignment::Center,
+            align_x: AlignX::Center,
+            align_y: AlignY::Center,
         }
+    }
+
+    pub const fn new_with_fields(fit_mode: FitMode, align_x: AlignX, align_y: AlignY) -> Self {
+        Self { fit_mode, align_x, align_y }
     }
 
     pub fn is_default(&self) -> bool {
         self.fit_mode == FitMode::Cover &&
-        self.h_align == HorizontalAlignment::Center &&
-        self.v_align == VerticalAlignment::Center
+        self.align_x == AlignX::Center &&
+        self.align_y == AlignY::Center
     }
 
     pub const fn fit_mode(mut self, fit_mode: FitMode) -> Self {
@@ -49,13 +54,13 @@ impl DisplayMode {
         self
     }
 
-    pub const fn h_align(mut self, h_align: HorizontalAlignment) -> Self {
-        self.h_align = h_align;
+    pub const fn align_x(mut self, align_x: AlignX) -> Self {
+        self.align_x = align_x;
         self
     }
 
-    pub const fn v_align(mut self, v_align: VerticalAlignment) -> Self {
-        self.v_align = v_align;
+    pub const fn align_y(mut self, align_y: AlignY) -> Self {
+        self.align_y = align_y;
         self
     }
 }
@@ -63,7 +68,16 @@ impl DisplayMode {
 impl fmt::Display for DisplayMode {
 
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = format!("{:?} {:?} {:?}", self.fit_mode, self.h_align, self.v_align);
+        let center =
+            self.align_x == AlignX::Center &&
+            self.align_y == AlignY::Center;
+
+        let s = if center {
+            format!("{:?} center", self.fit_mode)
+        } else {
+            format!("{:?} {:?} {:?}", self.fit_mode, self.align_x, self.align_y)
+        };
+
         write!(f, "{}", s.to_ascii_lowercase())
     }
 }
@@ -76,26 +90,19 @@ impl FromStr for DisplayMode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut mode = DisplayMode::new();
         
-        for token in s.to_ascii_lowercase().split(" ") {
+        for token in s.to_ascii_lowercase().split_whitespace() {
             match token {
                 "cover"   => mode.fit_mode = FitMode::Cover,
                 "contain" => mode.fit_mode = FitMode::Contain,
                 "stretch" => mode.fit_mode = FitMode::Stretch,
 
-                "left"    => mode.h_align = HorizontalAlignment::Left,
-                "hcenter" => mode.h_align = HorizontalAlignment::Center,
-                "right"   => mode.h_align = HorizontalAlignment::Right,
+                "left"    => mode.align_x = AlignX::Left,
+                "right"   => mode.align_x = AlignX::Right,
 
-                "top"     => mode.v_align = VerticalAlignment::Top,
-                "vcenter" => mode.v_align = VerticalAlignment::Center,
-                "bottom"  => mode.v_align = VerticalAlignment::Bottom,
+                "top"     => mode.align_y = AlignY::Top,
+                "bottom"  => mode.align_y = AlignY::Bottom,
 
-                "center" => {
-                    mode.h_align = HorizontalAlignment::Center;
-                    mode.v_align = VerticalAlignment::Center;
-                }
-
-                "" => {}
+                "center"  => {} // Do nothing because defaults are center
 
                 _ => return Err(DisplayModeParseError)
             }
