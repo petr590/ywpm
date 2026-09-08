@@ -1,14 +1,15 @@
 use std::collections::HashSet;
 
 use crate::daemon::action::Action;
-use crate::daemon::arg_parsing::error::ArgParseError;
 use crate::daemon::arg_parsing::time_period::ArgParseTimePeriod;
-use crate::daemon::settings::Settings;
+use crate::daemon::arg_parsing::{ArgParseError, ParsedTimePeriod::NotSpecified};
+use crate::daemon::state::Settings;
 use crate::{arg_parse_error_localized, arg_parse_error_localized_with_usage, util};
 
 #[derive(PartialEq)]
 pub(crate) enum UniqueOption {
-    DisplayId(u32)
+    DisplayId(u32),
+    ShortFlag,
 }
 
 #[derive(PartialEq)]
@@ -17,13 +18,13 @@ pub(crate) struct ArgParseAction {
     args: Vec<String>,
 
     settings_options: Vec<String>,
-    period_options:   Vec<String>,
+    period_options: Vec<String>,
 
     settings: Settings,
-    period:   ArgParseTimePeriod,
+    period: ArgParseTimePeriod,
 
     unique_option_names: HashSet<String>,
-    unique_options:      Vec<UniqueOption>,
+    unique_options: Vec<UniqueOption>,
 }
 
 impl ArgParseAction {
@@ -40,7 +41,6 @@ impl ArgParseAction {
         }
     }
 
-
     pub fn add_arg(&mut self, arg: String) {
         if self.name.is_none() {
             self.name = Some(arg);
@@ -50,18 +50,18 @@ impl ArgParseAction {
     }
 
     pub fn add_setting<F>(&mut self, arg: String, callback: F) -> Result<(), ArgParseError>
-    where 
-        F: FnOnce(&mut Settings) -> Result<(), ArgParseError> {
-        
+    where
+        F: FnOnce(&mut Settings) -> Result<(), ArgParseError>,
+    {
         self.settings_options.push(arg);
         callback(&mut self.settings)?;
         Ok(())
     }
 
     pub fn add_time_period_option<F>(&mut self, arg: String, callback: F) -> Result<(), ArgParseError>
-    where 
-        F: FnOnce(&mut ArgParseTimePeriod) -> Result<(), ArgParseError> {
-        
+    where
+        F: FnOnce(&mut ArgParseTimePeriod) -> Result<(), ArgParseError>,
+    {
         self.period_options.push(arg);
         callback(&mut self.period)?;
         Ok(())
@@ -69,7 +69,7 @@ impl ArgParseAction {
 
     pub fn add_unique_option(&mut self, arg: String, value: UniqueOption) -> Result<(), ArgParseError> {
         let is_new = self.unique_option_names.insert(arg.clone());
-        
+
         if !is_new {
             return Err(arg_parse_error_localized!(
                 "More then one '{arg}' option specfied",
@@ -81,7 +81,6 @@ impl ArgParseAction {
 
         Ok(())
     }
-    
 
     pub fn as_action(self, cmd: &str) -> Result<Action, ArgParseError> {
         if self.name.is_none() {
@@ -97,48 +96,50 @@ impl ArgParseAction {
         let mut action = match name {
             "help" => return Ok(Action::Help), // Ignore any other options
 
-            "list"   => Action::GetWallpaperList,
-            "get"    => Action::GetWallpaper,
-            "set"    => Action::SetWallpaper { path: String::new(), settings: Settings::new(), period: None },
+            "get"    => Action::GetCurrentWallpaper,
+            "set"    => Action::SetWallpaper { path: String::new(), settings: Settings::new(), period: NotSpecified },
             "random" => Action::SetRandowWallpaper,
-            
+
+            "list"   => Action::GetNodeList,
             "add"    => Action::AddNodes    { paths: Vec::new(), settings: Settings::new() },
             "remove" => Action::RemoveNodes { paths: Vec::new() },
+            "clear"  => Action::ClearNodes,
 
             "group-list"        => Action::GetGroupList,
             "new-group"         => Action::NewGroup        { name: String::new(), paths: Vec::new() },
             "get-group"         => Action::GetGroup        { name: String::new() },
-            "set-group"         => Action::SetGroup        { name: String::new(), settings: Settings::new(), period: None },
+            "set-group"         => Action::SetGroup        { name: String::new(), settings: Settings::new(), period: NotSpecified },
             "add-to-group"      => Action::AddToGroup      { name: String::new(), paths: Vec::new() },
             "remove-from-group" => Action::RemoveFromGroup { name: String::new(), paths: Vec::new() },
             "clear-group"       => Action::ClearGroup      { name: String::new() },
             "remove-group"      => Action::RemoveGroup     { name: String::new() },
 
-            "find-non-fitting"  => Action::FindNonFittingWallpapers { paths: Vec::new(), display_id: None },
+            "find-non-fitting" => Action::FindNonFittingWallpapers { paths: Vec::new(), display_id: None, is_short: false },
 
-            _ => return Err(arg_parse_error_localized_with_usage!(
-                "Unknown action: '{name}'",
-                "Неизвестное действие: '{name}'",
-                cmd
-            ))
+            _ => {
+                return Err(arg_parse_error_localized_with_usage!(
+                    "Unknown action: '{name}'",
+                    "Неизвестное действие: '{name}'",
+                    cmd
+                ));
+            }
         };
 
-        action = add_args           (name, action, self.args)?;
-        action = add_settings       (name, action, self.settings, self.settings_options)?;
-        action = add_period         (name, action, self.period, self.period_options)?;
-        action = add_unique_options (name, action, self.unique_options)?;
-        action = validate_name      (action)?;
-        action = validate_paths     (action)?;
+        action = add_args(name, action, self.args)?;
+        action = add_settings(name, action, self.settings, self.settings_options)?;
+        action = add_period(name, action, self.period, self.period_options)?;
+        action = add_unique_options(name, action, self.unique_options)?;
+        action = validate_name(action)?;
+        action = validate_paths(action)?;
         Ok(action)
     }
 }
 
 fn add_args(action_name: &str, mut action: Action, mut args: Vec<String>) -> Result<Action, ArgParseError> {
     match action {
-        Action::AddNodes    { ref mut paths, .. } |
-        Action::RemoveNodes { ref mut paths } => {
+        Action::AddNodes { ref mut paths, .. } | Action::RemoveNodes { ref mut paths } => {
             match args.len() {
-                0   => Err(ArgParseError::at_least_one_path_required(action_name)),
+                0 => Err(ArgParseError::at_least_one_path_required(action_name)),
                 1.. => {
                     *paths = args;
                     Ok(action)
@@ -161,7 +162,7 @@ fn add_args(action_name: &str, mut action: Action, mut args: Vec<String>) -> Res
 
         Action::NewGroup { ref mut name, ref mut paths } => {
             match args.len() {
-                0   => Err(ArgParseError::name_required(action_name)),
+                0 => Err(ArgParseError::name_required(action_name)),
                 1.. => {
                     *name = args.remove(0);
                     *paths = args;
@@ -173,8 +174,8 @@ fn add_args(action_name: &str, mut action: Action, mut args: Vec<String>) -> Res
         Action::AddToGroup      { ref mut name, ref mut paths } |
         Action::RemoveFromGroup { ref mut name, ref mut paths } => {
             match args.len() {
-                0   => Err(ArgParseError::name_required(action_name)),
-                1   => Err(ArgParseError::at_least_one_path_required(action_name)),
+                0 => Err(ArgParseError::name_required(action_name)),
+                1 => Err(ArgParseError::at_least_one_path_required(action_name)),
                 2.. => {
                     *name = args.remove(0);
                     *paths = args;
@@ -200,7 +201,7 @@ fn add_args(action_name: &str, mut action: Action, mut args: Vec<String>) -> Res
 
 fn require_exactly_one<F>(action_name: &str, mut args: Vec<String>, no_arg_error: F) -> Result<String, ArgParseError>
 where
-    F: FnOnce(&str) -> ArgParseError
+    F: FnOnce(&str) -> ArgParseError,
 {
     match args.len() {
         0   => Err(no_arg_error(action_name)),
@@ -208,7 +209,6 @@ where
         1   => Ok(args.remove(0)),
     }
 }
-
 
 fn add_settings(action_name: &str, mut action: Action, parsed_settings: Settings, settings_options: Vec<String>) -> Result<Action, ArgParseError> {
     match action {
@@ -226,7 +226,10 @@ fn add_settings(action_name: &str, mut action: Action, parsed_settings: Settings
             if parsed_settings.is_none() {
                 Ok(action)
             } else {
-                Err(ArgParseError::could_not_set_option(settings_options, action_name))
+                Err(ArgParseError::could_not_set_option(
+                    settings_options,
+                    action_name,
+                ))
             }
         }
     }
@@ -238,8 +241,8 @@ fn add_period(action_name: &str, mut action: Action, parsed_period: ArgParseTime
     match action {
         Action::SetWallpaper { ref mut period, .. } |
         Action::SetGroup     { ref mut period, .. } => {
-            assert!(period.is_none());
-            *period = parsed_period.as_time_period_opt()?;
+            assert!(*period == NotSpecified);
+            *period = parsed_period.as_parsed_time_period()?;
             Ok(action)
         }
 
@@ -247,31 +250,53 @@ fn add_period(action_name: &str, mut action: Action, parsed_period: ArgParseTime
             if parsed_period.is_none() {
                 Ok(action)
             } else {
-                Err(ArgParseError::could_not_set_option(period_options, action_name))
+                Err(ArgParseError::could_not_set_option(
+                    period_options,
+                    action_name,
+                ))
             }
         }
     }
 }
 
-
 fn add_unique_options(action_name: &str, mut action: Action, uniqie_options: Vec<UniqueOption>) -> Result<Action, ArgParseError> {
+
     for option in uniqie_options {
         match option {
             UniqueOption::DisplayId(id) => match action {
-                Action::FindNonFittingWallpapers { ref mut display_id, .. } => {
+                Action::FindNonFittingWallpapers {
+                    ref mut display_id, ..
+                } => {
                     *display_id = Some(id);
-                },
+                }
 
                 _ => {
-                    return Err(ArgParseError::could_not_set_option(vec!["--display-id".to_string()], action_name));
+                    return Err(ArgParseError::could_not_set_option(
+                        vec!["--display-id".to_string()],
+                        action_name,
+                    ));
                 }
-            }
+            },
+
+            UniqueOption::ShortFlag => match action {
+                Action::FindNonFittingWallpapers {
+                    ref mut is_short, ..
+                } => {
+                    *is_short = true;
+                }
+
+                _ => {
+                    return Err(ArgParseError::could_not_set_option(
+                        vec!["--display-id".to_string()],
+                        action_name,
+                    ));
+                }
+            },
         }
     }
 
     Ok(action)
 }
-
 
 fn validate_name(action: Action) -> Result<Action, ArgParseError> {
     match action {
@@ -303,12 +328,11 @@ fn validate_name(action: Action) -> Result<Action, ArgParseError> {
     Ok(action)
 }
 
-
 fn validate_paths(mut action: Action) -> Result<Action, ArgParseError> {
     match action {
         Action::SetWallpaper { ref mut path, .. } => {
             *path = util::canonicalize_path(path)?;
-        },
+        }
 
         Action::AddNodes                 { ref mut paths, .. } |
         Action::RemoveNodes              { ref mut paths, .. } |
@@ -316,7 +340,6 @@ fn validate_paths(mut action: Action) -> Result<Action, ArgParseError> {
         Action::AddToGroup               { ref mut paths, .. } |
         Action::RemoveFromGroup          { ref mut paths, .. } |
         Action::FindNonFittingWallpapers { ref mut paths, .. } => {
-
             let mut unique_paths = HashSet::with_capacity(paths.len());
             let mut new_paths = Vec::with_capacity(paths.len());
 

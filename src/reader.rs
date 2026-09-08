@@ -1,50 +1,61 @@
-use std::io::{self, Read};
-use std::error::Error;
+use std::io::Read;
 
-use crate::empty_package_error::EmptyPackageError;
+use crate::daemon::action::{ActionPerformError, ActionResult, ActionSuccess};
+use crate::daemon::warning::Warning;
+use crate::read_error::ReadError;
 
-
-pub fn read_string_vec(stream: &mut impl Read) -> Result<Vec<String>, Box<dyn Error>> {
-    let size = read_size(stream)?;
+pub fn read_string_vec(reader: &mut impl Read) -> Result<Vec<String>, ReadError> {
+    let size = read_size(reader)?;
 
     if size == 0 {
-        return Err(Box::new(EmptyPackageError));
+        return Err(ReadError::EmptyPackage);
     }
 
     let mut vec = Vec::new();
     vec.reserve_exact(size);
 
     for _ in 0..size {
-        let len = read_size(stream)?;
-        let data = read_data(stream, len)?;
-        vec.push(String::from_utf8(data)?);
+        vec.push(read_string(reader)?);
     }
 
     Ok(vec)
 }
 
-pub fn read_response(stream: &mut impl Read) -> Result<(bool, String), Box<dyn Error>> {
-    let is_ok = read_bool(stream)?;
-    let size = read_size(stream)?;
-    let data = read_data(stream, size)?;
-    Ok((is_ok, String::from_utf8(data)?))
+pub fn read_response(reader: &mut impl Read) -> Result<ActionResult, ReadError> {
+    let enum_tag = read_u8(reader)?;
+
+    match enum_tag {
+        0 => Ok(ActionResult::Ok(ActionSuccess {
+            message: read_string(reader)?,
+            warning: Warning::from(read_string(reader)?),
+        })),
+
+        1 => Ok(ActionResult::Err(ActionPerformError::new(read_string(
+            reader,
+        )?))),
+
+        _ => Err(ReadError::invalid_response(format!(
+            "Invalid enum tag in daemon response: {enum_tag:#04x}. Expected 0x00 or 0x01"
+        ))),
+    }
 }
 
-
-fn read_bool(stream: &mut impl Read) -> io::Result<bool> {
+fn read_u8(reader: &mut impl Read) -> Result<u8, ReadError> {
     let mut buf = [0u8; 1];
-    stream.read_exact(&mut buf)?;
-    Ok(buf[0] != 0)
+    reader.read_exact(&mut buf).map_err(ReadError::Io)?;
+    Ok(buf[0])
 }
 
-fn read_size(stream: &mut impl Read) -> io::Result<usize> {
-    let mut buf = [0u8; 4];
-    stream.read_exact(&mut buf)?;
-    Ok(u32::from_be_bytes(buf) as usize)
+fn read_size(reader: &mut impl Read) -> Result<usize, ReadError> {
+    let mut buf = [0u8; 8];
+    reader.read_exact(&mut buf).map_err(ReadError::Io)?;
+    Ok(u64::from_be_bytes(buf) as usize)
 }
 
-fn read_data(stream: &mut impl Read, len: usize) -> io::Result<Vec<u8>> {
+fn read_string(reader: &mut impl Read) -> Result<String, ReadError> {
+    let len = read_size(reader)?;
+
     let mut buf = vec![0u8; len];
-    stream.read_exact(&mut buf)?;
-    Ok(buf)
+    reader.read_exact(&mut buf).map_err(ReadError::Io)?;
+    Ok(String::from_utf8(buf).map_err(ReadError::FromUtf8)?)
 }

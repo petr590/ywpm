@@ -1,12 +1,11 @@
 use criterion::{Bencher, Criterion, criterion_group, criterion_main};
+use rand::RngExt;
 use std::error::Error;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::thread;
-use rand::RngExt;
 
 use ywpm::{reader, writer};
-
 
 macro_rules! bench_wrapper {
     ($client_func:expr, $server_func:expr, $vec:expr) => {
@@ -30,9 +29,7 @@ macro_rules! bench_wrapper {
     };
 }
 
-
 const SOCKET_PATH: &str = "/tmp/ywpm.socket";
-
 
 fn client_v1(stream: &mut UnixStream, vec: &Vec<String>) -> Result<(), Box<dyn Error>> {
     writer::write_string_vec(stream, vec)?;
@@ -44,7 +41,6 @@ fn server_v1(stream: &mut UnixStream) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-
 fn client_v2(stream: &mut UnixStream, vec: &Vec<String>) -> Result<(), Box<dyn Error>> {
     writer::write_string_vec(&mut BufWriter::new(stream), vec)?;
     Ok(())
@@ -55,7 +51,6 @@ fn server_v2(stream: &mut UnixStream) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-
 fn client_v3(stream: &mut UnixStream, vec: &Vec<String>) -> Result<(), Box<dyn Error>> {
     let sum = vec.iter().map(|s| s.len()).sum::<usize>();
     let size = 4 + 4 * vec.len() + sum;
@@ -65,7 +60,7 @@ fn client_v3(stream: &mut UnixStream, vec: &Vec<String>) -> Result<(), Box<dyn E
 
     let mut slice = &mut buffer[4..];
     writer::write_string_vec(&mut slice, vec)?;
-    
+
     stream.write_all(&buffer)?;
     Ok(())
 }
@@ -83,12 +78,8 @@ fn server_v3(stream: &mut UnixStream) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-
 fn get_vectors() -> (Vec<String>, Vec<String>, Vec<String>) {
-    let small_vec = vec![
-        String::from("ywpm"),
-        String::from("random"),
-    ];
+    let small_vec = vec![String::from("ywpm"), String::from("random")];
 
     let medium_vec = vec![
         String::from("ywpm"),
@@ -99,7 +90,6 @@ fn get_vectors() -> (Vec<String>, Vec<String>, Vec<String>) {
         String::from("cover top hcenter"),
     ];
 
-
     let mut rng = rand::rng();
     let mut huge_str = String::new();
     huge_str.reserve_exact(1_000);
@@ -107,7 +97,6 @@ fn get_vectors() -> (Vec<String>, Vec<String>, Vec<String>) {
     for _ in 0..1_000 {
         huge_str.push(rng.random_range(32..=126) as u8 as char);
     }
-
 
     let mut huge_vec = Vec::new();
     huge_vec.reserve_exact(100_000);
@@ -119,33 +108,56 @@ fn get_vectors() -> (Vec<String>, Vec<String>, Vec<String>) {
     (small_vec, medium_vec, huge_vec)
 }
 
-
 fn bench_socket_read_write(criterion: &mut Criterion) {
     let (small_vec, medium_vec, huge_vec) = get_vectors();
-    
-
 
     let mut group = criterion.benchmark_group("UnixStream Performance");
 
     group.sample_size(50);
 
-    group.bench_function("Format V1 (Raw UnixStream, small vec)",  bench_wrapper!(client_v1, server_v1, &small_vec));
-    group.bench_function("Format V1 (Raw UnixStream, medium vec)", bench_wrapper!(client_v1, server_v1, &medium_vec));
-    group.bench_function("Format V1 (Raw UnixStream, huge vec)",   bench_wrapper!(client_v1, server_v1, &huge_vec));
+    group.bench_function(
+        "Format V1 (Raw UnixStream, small vec)",
+        bench_wrapper!(client_v1, server_v1, &small_vec),
+    );
+    group.bench_function(
+        "Format V1 (Raw UnixStream, medium vec)",
+        bench_wrapper!(client_v1, server_v1, &medium_vec),
+    );
+    group.bench_function(
+        "Format V1 (Raw UnixStream, huge vec)",
+        bench_wrapper!(client_v1, server_v1, &huge_vec),
+    );
 
-    group.bench_function("Format V2 (Buf, small vec)",  bench_wrapper!(client_v2, server_v2, &small_vec));
-    group.bench_function("Format V2 (Buf, medium vec)", bench_wrapper!(client_v2, server_v2, &medium_vec));
-    group.bench_function("Format V2 (Buf, huge vec)",   bench_wrapper!(client_v2, server_v2, &huge_vec));
+    group.bench_function(
+        "Format V2 (Buf, small vec)",
+        bench_wrapper!(client_v2, server_v2, &small_vec),
+    );
+    group.bench_function(
+        "Format V2 (Buf, medium vec)",
+        bench_wrapper!(client_v2, server_v2, &medium_vec),
+    );
+    group.bench_function(
+        "Format V2 (Buf, huge vec)",
+        bench_wrapper!(client_v2, server_v2, &huge_vec),
+    );
 
-    group.bench_function("Format V3 (Buf, small vec)",  bench_wrapper!(client_v3, server_v3, &small_vec));
-    group.bench_function("Format V3 (Buf, medium vec)", bench_wrapper!(client_v3, server_v3, &medium_vec));
-    group.bench_function("Format V3 (Buf, huge vec)",   bench_wrapper!(client_v3, server_v3, &huge_vec));
+    group.bench_function(
+        "Format V3 (Buf, small vec)",
+        bench_wrapper!(client_v3, server_v3, &small_vec),
+    );
+    group.bench_function(
+        "Format V3 (Buf, medium vec)",
+        bench_wrapper!(client_v3, server_v3, &medium_vec),
+    );
+    group.bench_function(
+        "Format V3 (Buf, huge vec)",
+        bench_wrapper!(client_v3, server_v3, &huge_vec),
+    );
 
     group.finish();
 
     let _ = std::fs::remove_file(SOCKET_PATH);
 }
-
 
 criterion_group!(benches, bench_socket_read_write);
 criterion_main!(benches);

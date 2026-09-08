@@ -1,23 +1,22 @@
-use std::io::ErrorKind;
-use std::os::unix::net::UnixStream;
-use std::io::{BufReader, BufWriter};
 use std::error::Error;
+use std::io::{BufReader, BufWriter, ErrorKind};
+use std::os::unix::net::UnixStream;
 use std::process::exit;
 
 use ywpm::format_localized;
 use ywpm::reader;
-use ywpm::writer;
 use ywpm::util;
+use ywpm::writer;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut stream = match UnixStream::connect(util::get_socket_path()) {
         Ok(stream) => stream,
 
         Err(err) if err.kind() == ErrorKind::NotFound => {
-            eprintln!("{}", format_localized!(
-                "ywpm-daemon is not running",
-                "ywpm-daemon не запущен"
-            ));
+            eprintln!(
+                "{}",
+                format_localized!("ywpm-daemon is not running", "ywpm-daemon не запущен")
+            );
 
             exit(1);
         }
@@ -27,29 +26,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-
     let args: Vec<String> = std::env::args().collect();
-    
+
     writer::write_string_vec(&mut BufWriter::new(&mut stream), &args)?;
 
-    let (is_ok, message) = reader::read_response(&mut BufReader::new(&mut stream))?;
+    let action_result = reader::read_response(&mut BufReader::new(&mut stream))?;
 
-    if is_ok {
-        print!("{message}");
-
-        if !message.is_empty() && !message.ends_with("\n") {
-            println!();
+    match action_result {
+        Ok(success) => {
+            print!("{success}");
+            Ok(())
         }
 
-        Ok(())
-
-    } else {
-        eprint!("{message}");
-
-        if !message.is_empty() && !message.ends_with("\n") {
-            eprintln!();
+        Err(error) => {
+            eprintln!("{error}");
+            exit(1);
         }
-
-        exit(1);
     }
 }

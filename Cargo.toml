@@ -1,24 +1,51 @@
 [package]
 name = "ywpm"
-version = "0.1.1"
+description = "YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers."
+authors = ["Petr <petrwinch-code@mail.ru>"]
+version = "1.1.1"
 edition = "2024"
 
+[package.metadata.deb]
+maintainer = "Petr <petrwinch-code@mail.ru>"
+extended-description = """\
+YoRHa Wallpaper Manager is a modern, user-friendly command-line tool that helps \
+you manage all your wallpapers on Linux. Please note that YWpM only determines \
+when and which wallpapers to render, it doesn’t render the wallpapers itself. \
+Instead, YWpM uses a backend. Currently, only mpvpaper is supported as a backend.\
+"""
+assets = [
+    ["target/release/ywpm-daemon", "usr/bin/ywpm-daemon",               "755"],
+    ["target/release/ywpm",        "usr/bin/ywpm",                      "755"],
+    ["systemd/ywpm.service",       "usr/lib/systemd/user/ywpm.service", "644"],
+]
+
+[package.metadata.deb.variants.ru]
+extended-description = """\
+Менеджер обоев YoRHa. Простой консольный инструмент для лёгкого управления обоями.
+YoRHa Wallpaper Manager — это современный, удобный консольный инструмент, который \
+помогает управлять всеми вашими обоями в Linux. Обратите внимание, что YWpM только \
+определяет, когда и какие обои реднерить, а не рендерит обои самостоятельно. \
+Вместо этого YWpM использует бэкенд. На данный момент в качестве бэкенда \
+поддерживается только mpvpaper.\
+"""
+
 [dependencies]
-chrono     = { version = "0.4", features = ["alloc", "unstable-locales"] }
-display-info = "0.5.9"
-ffprobe = "0.4.0"
-imagesize = "0.15.0"
-indoc      = "2"
-itertools  = "0.15"
-nix        = { version = "0.31", features = ["poll", "signal"] }
-once_cell  = "1"
-phf        = { version = "0.14", features = ["macros"] }
-rand       = "0.10"
-regex      = "1"
-serde      = { version = "1", features = ["derive", "rc"] }
-serde_with = { version = "3.22", features = ["chrono"] }
-walkdir    = "2"
-yaml_serde = "0.10"
+chrono       = { version = "0.4", features = ["alloc", "unstable-locales"] }
+display-info = "0.5"
+ffprobe      = "0.4"
+imagesize    = "0.15"
+indexmap     = "2"
+indoc        = "2"
+itertools    = "0.15"
+nix          = { version = "0.31", features = ["poll", "signal"] }
+once_cell    = "1"
+phf          = { version = "0.14", features = ["macros"] }
+rand         = "0.10"
+regex        = "1"
+serde        = { version = "1", features = ["derive", "rc"] }
+serde_with   = { version = "3", features = ["chrono"] }
+walkdir      = "2"
+yaml_serde   = "0.10"
 
 
 [[bin]]

@@ -1,7 +1,6 @@
 use std::cell::RefMut;
 
-use crate::daemon::display_mode::DisplayMode;
-use crate::daemon::wallpaper_node::WallpaperNode;
+use crate::daemon::state::{DisplayMode, WallpaperNode};
 
 /// Настройки для WallpaperNode. Каждое значение опционально, так как юзер может задать или не задать определённую настройку.
 #[derive(Debug, PartialEq, Clone)]
@@ -13,13 +12,17 @@ pub struct Settings {
 impl Settings {
     pub const fn new() -> Self {
         Self {
-            mode:            None,
+            mode: None,
             recursive_level: None,
         }
     }
 
+    pub fn is_some(&self) -> bool {
+        self.mode.is_some() || self.recursive_level.is_some()
+    }
+
     pub fn is_none(&self) -> bool {
-        self.mode.is_none() && self.recursive_level.is_none()
+        !self.is_some()
     }
 
     pub fn update_node(&self, node: &mut RefMut<WallpaperNode>) {

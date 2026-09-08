@@ -1,8 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::daemon::time_period::TimePeriod;
-use crate::daemon::wallpaper_node::SharedWallpaperNode;
-use crate::daemon::dtos::WallpaperGroupDto;
+use crate::daemon::state::dtos::WallpaperGroupDto;
+use crate::daemon::state::{SharedWallpaperNode, TimePeriod};
 
 #[derive(Debug, Clone)]
 pub struct WallpaperGroup {
@@ -11,21 +10,23 @@ pub struct WallpaperGroup {
 }
 
 impl WallpaperGroup {
-
     pub fn new() -> Self {
         Self {
             nodes: HashSet::new(),
-            period: None
+            period: None,
         }
     }
 
     pub fn from_dto(dto: WallpaperGroupDto, wallpapers: &HashMap<String, SharedWallpaperNode>) -> Self {
         Self {
-            nodes: dto.nodes.iter()
+            nodes: dto
+                .nodes
+                .iter()
                 .map(|path| wallpapers.get(path).cloned())
-                .flatten().collect(),
-            
-            period: dto.period
+                .flatten()
+                .collect(),
+
+            period: dto.period,
         }
     }
 
@@ -45,11 +46,13 @@ impl WallpaperGroup {
 
     pub fn as_dto(&self) -> WallpaperGroupDto {
         WallpaperGroupDto {
-            nodes: self.nodes.iter()
+            nodes: self
+                .nodes
+                .iter()
                 .map(|node| node.borrow().path().to_string())
                 .collect(),
-            
-            period: self.period.clone()
+
+            period: self.period.clone(),
         }
     }
 

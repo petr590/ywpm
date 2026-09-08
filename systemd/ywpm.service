@@ -1,0 +1,21 @@
+[Unit]
+Description=YoRHa Wallpaper Manager Service
+After=default.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ywpm-daemon
+ExecStopPost=/usr/bin/rm -f %t/ywpm.sock
+Restart=on-failure
+RestartSec=3
+
+ImportCredential=wayland-*
+ImportCredential=display-*
+
+#[Socket]
+#ListenStream=%t/ywpm.sock
+#RemoveOnStop=yes
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
 
-use crate::daemon::time_period::TimePeriod;
-use crate::daemon::wallpaper_node::SharedWallpaperNode;
+use serde::{Deserialize, Serialize};
 
+use crate::daemon::state::{SharedWallpaperNode, TimePeriod};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WallpaperGroupDto {
@@ -13,13 +12,12 @@ pub struct WallpaperGroupDto {
     pub period: Option<TimePeriod>,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateDto {
     pub current_wallpaper_path: Option<String>,
 
     #[serde(rename = "wallpapers")]
-    pub nodes:  Vec<SharedWallpaperNode>,
+    pub nodes: Vec<SharedWallpaperNode>,
 
     pub groups: HashMap<String, WallpaperGroupDto>,
 }

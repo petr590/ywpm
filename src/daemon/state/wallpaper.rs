@@ -1,10 +1,9 @@
-use crate::daemon::display_mode::DisplayMode;
-use crate::daemon::wallpaper_node::WallpaperNode;
+use crate::daemon::state::{DisplayMode, WallpaperNode};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Wallpaper {
-    path: String,
-    mode: DisplayMode,
+    pub path: String,
+    pub mode: DisplayMode,
 }
 
 impl From<&WallpaperNode> for Wallpaper {
@@ -20,7 +19,7 @@ impl Wallpaper {
     pub fn new(path: impl Into<String>, mode: DisplayMode) -> Self {
         Self {
             path: path.into(),
-            mode
+            mode,
         }
     }
 
@@ -30,5 +29,9 @@ impl Wallpaper {
 
     pub fn mode(&self) -> &DisplayMode {
         &self.mode
+    }
+
+    pub fn path_move(self) -> String {
+        self.path
     }
 }

@@ -1,11 +1,10 @@
-use std::cell::{RefCell, Ref, RefMut};
+use std::cell::{Ref, RefCell, RefMut};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::daemon::display_mode::DisplayMode;
-use crate::daemon::time_period::TimePeriod;
+use crate::daemon::state::{DisplayMode, TimePeriod};
 
 /// WallpaperNode - узел, который может представлять как файл, так и папку.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -15,7 +14,7 @@ pub struct WallpaperNode {
     #[serde(
         default = "DisplayMode::new",
         skip_serializing_if = "DisplayMode::is_default",
-        with = "crate::daemon::display_mode_format"
+        with = "crate::daemon::state::display_mode_format"
     )]
     pub mode: DisplayMode,
 
@@ -37,10 +36,14 @@ const fn is_default_recursive_level(recursive_level: &u16) -> bool {
     *recursive_level == default_recursive_level()
 }
 
-
 impl WallpaperNode {
     pub fn new(path: impl Into<String>, mode: DisplayMode, recursive_level: u16, period: Option<TimePeriod>) -> Self {
-        Self { path: path.into(), mode, recursive_level, period }
+        Self {
+            path: path.into(),
+            mode,
+            recursive_level,
+            period,
+        }
     }
 
     pub fn path(&self) -> &String {
@@ -49,14 +52,13 @@ impl WallpaperNode {
 
     pub fn with_path(&self, path: impl Into<String>) -> Self {
         Self {
-            path:            path.into(),
-            mode:            self.mode.clone(),
+            path: path.into(),
+            mode: self.mode.clone(),
             recursive_level: self.recursive_level,
-            period:          self.period.clone(),
+            period: self.period.clone(),
         }
     }
 }
-
 
 #[derive(Debug, Clone, Eq, Serialize, Deserialize)]
 pub struct SharedWallpaperNode(Rc<RefCell<WallpaperNode>>);
@@ -70,6 +72,12 @@ impl PartialEq for SharedWallpaperNode {
 impl Hash for SharedWallpaperNode {
     fn hash<H: Hasher>(&self, state: &mut H) {
         Rc::as_ptr(&self.0).hash(state);
+    }
+}
+
+impl AsRef<SharedWallpaperNode> for SharedWallpaperNode {
+    fn as_ref(&self) -> &SharedWallpaperNode {
+        self
     }
 }
 

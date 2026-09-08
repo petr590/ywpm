@@ -4,7 +4,7 @@ use crate::arg_parse_error_localized;
 
 #[derive(Debug, PartialEq)]
 pub struct ArgParseError {
-    message: String
+    message: String,
 }
 
 impl std::error::Error for ArgParseError {}
@@ -17,13 +17,14 @@ impl fmt::Display for ArgParseError {
 
 impl ArgParseError {
     pub fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into() }
+        Self {
+            message: message.into(),
+        }
     }
 
     pub fn message(&self) -> &String {
         &self.message
     }
-
 
     pub fn unknown_argument(arg: &str, action_name: &str) -> Self {
         arg_parse_error_localized!(
@@ -57,11 +58,11 @@ impl ArgParseError {
         arg_parse_error_localized!(
             "Could not set {} for action '{}'",
             "Невозможно задать {} для действия '{}'",
-            format_options(settings_options), action_name
+            format_options(settings_options),
+            action_name
         )
     }
 }
-
 
 fn format_options(mut options: Vec<String>) -> String {
     match options.len() {
@@ -74,14 +75,12 @@ fn format_options(mut options: Vec<String>) -> String {
     }
 }
 
-
 #[macro_export]
 macro_rules! arg_parse_error_localized {
     ($en_fmt:expr, $ru_fmt:expr $(, $arg:expr)* $(,)?) => {
         crate::daemon::arg_parsing::error::ArgParseError::new(crate::format_localized!($en_fmt, $ru_fmt $(, $arg)*))
     };
 }
-
 
 #[macro_export]
 macro_rules! arg_parse_error_localized_with_usage {

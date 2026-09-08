@@ -1,20 +1,33 @@
 use std::io::{self, Write};
 
+use crate::daemon::action::ActionSuccess;
 
-pub fn write_string_vec(stream: &mut impl Write, vec: &Vec<String>) -> io::Result<()> {
-    stream.write_all(&(vec.len() as u32).to_be_bytes())?;
+pub fn write_string_vec(writer: &mut impl Write, vec: &Vec<String>) -> io::Result<()> {
+    writer.write_all(&(vec.len() as u64).to_be_bytes())?;
 
     for s in vec {
-        stream.write_all(&(s.len() as u32).to_be_bytes())?;
-        stream.write_all(s.as_bytes())?;
+        writer.write_all(&(s.len() as u64).to_be_bytes())?;
+        writer.write_all(s.as_bytes())?;
     }
 
     Ok(())
 }
 
-pub fn write_response(writer: &mut impl Write, is_ok: bool, string: &str) -> io::Result<()> {
-    writer.write_all(&[if is_ok { 1 } else { 0 }])?;
-    writer.write_all(&(string.len() as u32).to_be_bytes())?;
+pub fn write_ok(writer: &mut impl Write, success: ActionSuccess) -> io::Result<()> {
+    writer.write_all(&[0])?;
+    write_string(writer, &success.message)?;
+    write_string(writer, success.warning.message())?;
+    Ok(())
+}
+
+pub fn write_error(writer: &mut impl Write, message: &str) -> io::Result<()> {
+    writer.write_all(&[1])?;
+    write_string(writer, message)?;
+    Ok(())
+}
+
+fn write_string(writer: &mut impl Write, string: &str) -> io::Result<()> {
+    writer.write_all(&(string.len() as u64).to_be_bytes())?;
     writer.write_all(&string.as_bytes())?;
     Ok(())
 }

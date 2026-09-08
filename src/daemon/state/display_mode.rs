@@ -1,17 +1,28 @@
-use core::fmt;
+use std::fmt;
 use std::str::FromStr;
-use serde::{Serialize, Deserialize};
 
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum FitMode { Cover, Contain, Stretch }
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum AlignX { Left, Center, Right }
+pub enum FitMode {
+    Cover,
+    Contain,
+    Stretch,
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum AlignY { Top, Center, Bottom }
+pub enum AlignX {
+    Left,
+    Center,
+    Right,
+}
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum AlignY {
+    Top,
+    Center,
+    Bottom,
+}
 
 #[derive(Debug)]
 pub struct DisplayModeParseError;
@@ -21,7 +32,6 @@ impl fmt::Display for DisplayModeParseError {
         write!(f, "DisplayModeParseError")
     }
 }
-
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct DisplayMode {
@@ -40,13 +50,17 @@ impl DisplayMode {
     }
 
     pub const fn new_with_fields(fit_mode: FitMode, align_x: AlignX, align_y: AlignY) -> Self {
-        Self { fit_mode, align_x, align_y }
+        Self {
+            fit_mode,
+            align_x,
+            align_y,
+        }
     }
 
     pub fn is_default(&self) -> bool {
-        self.fit_mode == FitMode::Cover &&
-        self.align_x == AlignX::Center &&
-        self.align_y == AlignY::Center
+        self.fit_mode == FitMode::Cover
+            && self.align_x == AlignX::Center
+            && self.align_y == AlignY::Center
     }
 
     pub const fn fit_mode(mut self, fit_mode: FitMode) -> Self {
@@ -66,11 +80,8 @@ impl DisplayMode {
 }
 
 impl fmt::Display for DisplayMode {
-
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let center =
-            self.align_x == AlignX::Center &&
-            self.align_y == AlignY::Center;
+        let center = self.align_x == AlignX::Center && self.align_y == AlignY::Center;
 
         let s = if center {
             format!("{:?} center", self.fit_mode)
@@ -82,29 +93,27 @@ impl fmt::Display for DisplayMode {
     }
 }
 
-
-
 impl FromStr for DisplayMode {
     type Err = DisplayModeParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut mode = DisplayMode::new();
-        
+
         for token in s.to_ascii_lowercase().split_whitespace() {
             match token {
-                "cover"   => mode.fit_mode = FitMode::Cover,
+                "cover" => mode.fit_mode = FitMode::Cover,
                 "contain" => mode.fit_mode = FitMode::Contain,
                 "stretch" => mode.fit_mode = FitMode::Stretch,
 
-                "left"    => mode.align_x = AlignX::Left,
-                "right"   => mode.align_x = AlignX::Right,
+                "left" => mode.align_x = AlignX::Left,
+                "right" => mode.align_x = AlignX::Right,
 
-                "top"     => mode.align_y = AlignY::Top,
-                "bottom"  => mode.align_y = AlignY::Bottom,
+                "top" => mode.align_y = AlignY::Top,
+                "bottom" => mode.align_y = AlignY::Bottom,
 
-                "center"  => {} // Do nothing because defaults are center
+                "center" => {} // Do nothing because defaults are center
 
-                _ => return Err(DisplayModeParseError)
+                _ => return Err(DisplayModeParseError),
             }
         }
 
