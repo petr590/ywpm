@@ -2,6 +2,7 @@ use nix::errno::Errno;
 use nix::poll::{self, PollFd, PollFlags};
 use nix::sys::signal::{SigSet, Signal};
 use nix::sys::signalfd::{SfdFlags, SignalFd};
+use sd_notify::NotifyState;
 use std::env;
 use std::error::Error;
 use std::io::{self, BufReader, BufWriter};
@@ -19,10 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut state = config::read_or_create_empty(util::get_config_path())?;
 
     let args: Vec<String> = env::args().collect();
-
-    if args.len() <= 1 {
-        wallpaper::restore(&mut state)?;
-    } else {
+    if args.len() > 1 {
         perform_initial_action(&args, &mut state);
     }
 
@@ -60,6 +58,7 @@ fn main_loop(mut state: State) -> Result<(), Box<dyn Error>> {
     let signal_fd = get_signal_fd()?;
 
     println!("Daemon started. Waiting for events...");
+    let _ = sd_notify::notify(&[NotifyState::Ready]);
 
     loop {
         let mut poll_fds = [

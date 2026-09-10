@@ -11,9 +11,7 @@ pub fn get_list(state: &State) -> String {
     } else {
         format!(
             "Wallpapers:\n{}",
-            state
-                .nodes
-                .values()
+            state.nodes.values()
                 .map(|node| node.borrow().path().clone())
                 .format("\n")
         )

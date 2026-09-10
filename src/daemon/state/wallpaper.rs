@@ -30,8 +30,4 @@ impl Wallpaper {
     pub fn mode(&self) -> &DisplayMode {
         &self.mode
     }
-
-    pub fn path_move(self) -> String {
-        self.path
-    }
 }

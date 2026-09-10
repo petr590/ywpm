@@ -11,7 +11,11 @@ thread_local! {
     static CHILD: RefCell<Option<Child>> = RefCell::new(None);
 }
 
-pub fn run(wallpaper: &Wallpaper) -> Result<(), Box<dyn Error>> {
+pub(crate) fn is_running() -> bool {
+    CHILD.with_borrow(|child| child.is_some())
+}
+
+pub(crate) fn run(wallpaper: &Wallpaper) -> Result<(), Box<dyn Error>> {
     stop();
 
     assert!(Path::new(wallpaper.path()).is_file());

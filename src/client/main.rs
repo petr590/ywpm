@@ -13,10 +13,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         Ok(stream) => stream,
 
         Err(err) if err.kind() == ErrorKind::NotFound => {
-            eprintln!(
-                "{}",
-                format_localized!("ywpm-daemon is not running", "ywpm-daemon не запущен")
-            );
+            eprintln!("{}", format_localized!(
+                "ywpmd is not running",
+                "ywpmd не запущен"
+            ));
 
             exit(1);
         }

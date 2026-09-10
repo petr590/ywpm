@@ -2,7 +2,7 @@
 name = "ywpm"
 description = "YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers."
 authors = ["Petr <petrwinch-code@mail.ru>"]
-version = "1.1.1"
+version = "1.1.2"
 edition = "2024"
 
 [package.metadata.deb]
@@ -14,9 +14,10 @@ when and which wallpapers to render, it doesn’t render the wallpapers itself. 
 Instead, YWpM uses a backend. Currently, only mpvpaper is supported as a backend.\
 """
 assets = [
-    ["target/release/ywpm-daemon", "usr/bin/ywpm-daemon",               "755"],
-    ["target/release/ywpm",        "usr/bin/ywpm",                      "755"],
-    ["systemd/ywpm.service",       "usr/lib/systemd/user/ywpm.service", "644"],
+    ["target/release/ywpmd",  "usr/libexec/ywpmd",                  "755"],
+    ["target/release/ywpm",   "usr/bin/ywpm",                       "755"],
+    ["systemd/ywpmd-pre.sh",  "usr/libexec/ywpmd-pre.sh",           "755"],
+    ["systemd/ywpmd.service", "usr/lib/systemd/user/ywpmd.service", "644"],
 ]
 
 [package.metadata.deb.variants.ru]
@@ -31,6 +32,7 @@ YoRHa Wallpaper Manager — это современный, удобный кон
 
 [dependencies]
 chrono       = { version = "0.4", features = ["alloc", "unstable-locales"] }
+const-str    = "1"
 display-info = "0.5"
 ffprobe      = "0.4"
 imagesize    = "0.15"
@@ -42,6 +44,7 @@ once_cell    = "1"
 phf          = { version = "0.14", features = ["macros"] }
 rand         = "0.10"
 regex        = "1"
+sd-notify    = "0.5"
 serde        = { version = "1", features = ["derive", "rc"] }
 serde_with   = { version = "3", features = ["chrono"] }
 walkdir      = "2"
@@ -49,7 +52,7 @@ yaml_serde   = "0.10"
 
 
 [[bin]]
-name = "ywpm-daemon"
+name = "ywpmd"
 path = "src/daemon/main.rs"
 
 [[bin]]

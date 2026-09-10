@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::{arg_parse_error_localized, arg_parse_error_localized_with_usage};
+use crate::{arg_parse_error_localized, arg_parse_error_localized_with_usage, util};
 use crate::daemon::action::Action;
 use crate::daemon::arg_parsing::action::{ArgParseAction, UniqueOption};
 use crate::daemon::arg_parsing::{ArgParseError, time_parser};
@@ -16,50 +16,67 @@ macro_rules! GET_HELP_MESSAGE {
                     {} <ДЕЙСТВИЕ> [ОПЦИИ] [АРГУМЕНТЫ]
 
                 ДЕЙСТВИЯ (Обои):
-                    list                    Получить список всех путей к обоям
-                    get                     Получить путь к текущим обоям
-                    set <ПУТЬ>              Установить указанные обои. Если указана папка, то устанавливаются случайные обои из папки
-                    random                  Установить случайные обои из всех в списке
-                    add <ПУТИ...>           Добавить папку/файл в список и, опционально, настроить параметры (--mode, --recursive-level и т.д.)
-                    remove <ПУТИ...>        Удалить папку/файл из списка
+                    list                Получить список всех путей к обоям.
+                    get                 Получить путь к текущим обоям.
+                    set <ПУТЬ>          Установить указанные обои. Если указана папка, то
+                                        устанавливаются случайные обои из папки.
+                    random              Установить случайные обои из всех в списке.
+                    add <ПУТИ...>       Добавить папку/файл в список и, опционально, настроить
+                                        параметры (--mode, --recursive-level и т.д.)
+                    remove <ПУТИ...>    Удалить папку/файл из списка (не с диска).
+                    restore             Восстановить предыдущие обои (как правило, сервис
+                                        systemd автоматически передаёт этот параметр демону
+                                        при запуске).
 
                 ДЕЙСТВИЯ (Группы):
-                    group-list                          Показать список всех групп
-                    new-group <ИМЯ> [ПУТИ...]           Создать новую группу
-                    get-group <ИМЯ>                     Показать информацию и состав группы
-                    set-group <ИМЯ>                     Установить рандомные обои из группы
-                    add-to-group <ИМЯ> <ПУТИ...>        Добавить файлы/папки в группу
-                    remove-from-group <ИМЯ> <ПУТИ...>   Изъять файлы/папки из группы
-                    clear-group <ИМЯ>                   Очистить все элементы внутри группы
-                    remove-group <ИМЯ>                  Удалить группу
-                
+                    group-list                  Показать список всех групп.
+                    new-group <ИМЯ> [ПУТИ...]   Создать новую группу.
+                    get-group <ИМЯ>             Показать информацию и состав группы.
+                    set-group <ИМЯ>             Установить рандомные обои из группы.
+                    add-to-group <ИМЯ> <ПУТИ...>
+                                                Добавить файлы/папки в группу.
+                    remove-from-group <ИМЯ> <ПУТИ...>
+                                                Удалить файлы/папки из группы (не с диска).
+                    clear-group <ИМЯ>           Очистить все элементы внутри группы.
+                    remove-group <ИМЯ>          Удалить группу.
+
                 ДРУГИЕ ДЕЙСТВИЯ:
-                    find-non-fitting [ПУТИ...]  Найти все изображения и видео, у которых соотношение сторон отличаеся от монитора
-                                                и для которых не задан --mode. Для видео также проверяет попиксельное совпадение
-                                                разрешения, так как масштабирование
-                                                видео в реальном времени - недешёвая операция.
+                    find-non-fitting [ПУТИ...]
+                                            Найти все изображения и видео, у которых
+                                            соотношение сторон отличаеся от монитора и для
+                                            которых не задан --mode. Для видео также проверяет
+                                            попиксельное совпадение разрешения, так как
+                                            масштабирование видео в реальном времени -
+                                            недешёвая операция.
 
                 ОПЦИИ ВРЕМЕНИ (Для set и set-group):
-                    -s, --since <ВРЕМЯ>     Начало действия (по умолчанию: сейчас). Формат: \"14:00\", \"2026-06-11 12:00\"
-                    -u, --until <ВРЕМЯ>     Конец действия. Формат: дата/время, now, tomorrow
-                    -d, --duration <ДЛИТ>   Длительность применения (например: 30m, 40 minutes, 12h, 3d, 2w, 5 month, 1 year, 20:30).
-                                            Месяцы и годы считаются по 30 и 365 дней соответственно.
-                    
+                    -s, --since <ВРЕМЯ>     Начало периода (по умолчанию: now).
+                                            Формат: \"14:00\", \"2026-06-11 12:00\".
+                    -u, --until <ВРЕМЯ>     Конец периода. Формат: дата/время, now, tomorrow
+                    -d, --duration <ДЛИТ>   Длительность периода (например: 30m, 40 minutes,
+                                            12h, 3d, 2w, 5 month, 1 year, 20:30). Месяцы и годы
+                                            считаются по 30 и 365 дней соответственно.
+
                     Если опции времени не указаны, обои ставятся только на текущую сессию.
 
                 ОБЩИЕ ОПЦИИ:
-                    -m, --mode <РЕЖИМ>  Установить режим отображения обоев. По умолчанию: \"cover center\".
-                                    Сторона, к которой будут «прилипать» обои: left, right, top, bottom, center
-                                    Отрисовка изображения:
-                                    - cover - изображение выходит за границы экрана без искажения пропорций
-                                    - contain - изображение полностью помещается в экран без искажения пропорций
-                                    - stretch - изображение растягивается под размер экрана с искажением пропорций
-                    
-                    -r, --recursive-level <УРОВЕНЬ>  Максимальный уровень рекурсивного поиска подпапок. Никак не влияет на файлы. По умолчанию: 1.
+                    -m, --mode <РЕЖИМ>
+                                Установить режим отображения обоев. По умолчанию:
+                                \"cover center\". Сторона, к которой будут «прилипать» обои:
+                                left, right, top, bottom, center.
+                                Отрисовка изображения:
+                                - cover   - заполнить экран без искажений пропорций с обрезкой
+                                - contain - вписать в экран без искажений пропорций с полями
+                                - stretch - растянуть на весь экран с искажением пропорций
 
-                        --display-id     Указать id дисплея (только для find-non-fitting)
-                    -h, --help           Показать эту справку
-                    -v, --version        Показать версию программы
+                    -r, --recursive-level <УРОВЕНЬ>
+                                        Максимальный уровень рекурсивного поиска подпапок.
+                                        Никак не влияет на файлы. По умолчанию: 1.
+                        --socket        Файл сокета для подключения
+                    -v, --verbose       Подробный вывод (только для get и find-non-fitting)
+                        --display-id    Указать id дисплея (только для find-non-fitting)
+                    -h, --help          Показать эту справку
+                    -V, --version       Показать версию программы
                 ", $cmd)
 
         } else {
@@ -69,50 +86,69 @@ macro_rules! GET_HELP_MESSAGE {
                 USAGE:
                     {} <ACTION> [OPTIONS] [ARGUMENTS]
 
-                ACTIONS (Wallpapers):
-                    list                    Get a list of all wallpaper paths
-                    get                     Get the path to the current wallpaper
-                    set <PATH>              Set the specified wallpaper. If a folder is specified, random wallpapers from the folder are set
-                    random                  Set random wallpapers from all in the list
-                    add <PATHS...>          Add a folder/file to the list and, optionally, configure parameters (--mode, --recursive-level, etc.)
-                    remove <PATHS...>       Delete a folder/file from the list
+                ACTIONS (Wallpaper):
+                    list                Get list of all wallpaper paths.
+                    get                 Get path to current wallpaper.
+                    set <PATH>          Set specified wallpaper. If folder is specified,
+                                        random wallpapers from folder are set.
+                    random              Set random wallpapers from all in list.
+                    add <PATH...>       Add a folder/file to list and, optionally,
+                                        configure parameters (--mode, --recursive-level, etc.)
+                    remove <PATH...>    Remove a folder/file from list (not from disk).
+                    restore             Restore previous wallpaper (usually, systemd service
+                                        automatically passes this parameter to daemon
+                                        at startup).
 
                 ACTIONS (Groups):
-                    group-list                          Show a list of all groups
-                    new-group <NAME> [PATHS...]          Create a new group
-                    get-group <NAME>                     Show information and composition of the group
-                    set-group <NAME>                     Set random wallpapers from the group
-                    add-to-group <NAME> <PATHS...>       Add files/folders to the group
-                    remove-from-group <NAME> <PATHS...>  Remove files/folders from the group
-                    clear-group <NAME>                   Clear all elements within the group
-                    remove-group <NAME>                  Delete the group
-                
-                ANOTHER ACTIONS:
-                    find-non-fitting [PATHS...]     Find all images and videos whose aspect ratio differs from the monitor and for which --mode
-                                                    is not specified. For videos, it also checks for pixel-by-pixel resolution matching, since
-                                                    scaling video in real time is an expensive operation.
+                    group-list                  Show list of all groups.
+                    new-group <NAME> [PATH...]  Create new group.
+                    get-group <NAME>            Show information and group's composition.
+                    set-group <NAME>            Set random wallpapers from group.
+                    add-to-group <NAME> <PATH...>
+                                                Add files/folders to group.
+                    remove-from-group <NAME> <PATH...>
+                                                Remove files/folders from group (not from disk).
+                    clear-group <NAME>          Clear all elements within group.
+                    remove-group <NAME>         Remove group.
+
+                OTHER ACTIONS:
+                    find-non-fitting [PATH...]
+                                            Find all images and videos whose aspect ratio
+                                            differs from monitor and for which --mode is
+                                            not specified. For videos, it also checks for
+                                            pixel-by-pixel resolution matching, as real-time
+                                            video scaling is expensive operation.
+                    
+                    help                    Show this help
 
                 TIME OPTIONS (For set and set-group):
-                    -s, --since <TIME>     Start of action (default: now). Format: \"14:00\", \"2026-06-11 12:00\"
-                    -u, --until <TIME>     End of action. Format: date/time, now, tomorrow
-                    -d, --duration <DURATION>   Duration of application (e.g.: 30m, 40 minutes, 12h, 3d, 2w, 5 month, 1 year, 20:30).
-                                                Months and years are counted as 30 and 365 days, respectively.
-                    
-                    If no time options are specified, the wallpaper is set only for the current session.
+                    -s, --since <TIME>      Period start (default: now).
+                                            Format: \"14:00\", \"2026-06-11 12:00\".
+                    -u, --until <TIME>      Period end. Format: date/time, now, tomorrow
+                    -d, --duration <DUR>    Period duration (e.g.: 30m, 40 minutes, 12h, 3d,
+                                            2w, 5 month, 1 year, 20:30). Months and
+                                            years are counted as 30 and 365 days, respectively.
+
+                If no time options are specified, wallpaper is set only for current session.
 
                 GENERAL OPTIONS:
-                    -m, --mode <MODE>  Set the wallpaper display mode. Default: \"cover center\".
-                                    The side to which the wallpaper will “stick”: left, right, top, bottom, center
-                                    Image rendering:
-                                    - cover — the image extends beyond the screen boundaries without distorting proportions
-                                    - contain — the image fits entirely within the screen without distorting proportions
-                                    - stretch — the image is stretched to fit the screen size with distortion of proportions
-                    
-                    -r, --recursive-level <LEVEL> Maximum level of recursive subfolder search. Does not affect files in any way. Default: 1.
-                    
-                        --display-id     Specify the display ID (only for find-non-fitting)
-                    -h, --help           Show this help
-                    -v, --version        Show the program version
+                    -m, --mode <MODE>
+                                Set wallpaper display mode. Default: \"cover center\".
+                                Side to which wallpaper will «stick»: left, right, top,
+                                bottom, center.
+                                Image rendering:
+                                - cover   - fill screen, keep aspect ratio, with cropping
+                                - contain - fit into screen, keep aspect ratio, with paddings
+                                - stretch - stretch to fill screen with distortion
+
+                    -r, --recursive-level <LEVEL>
+                                        Maximum level of recursive search for subfolders.
+                                        It does not affect files in any way. Default: 1.
+                        --socket        Socket file to connect
+                    -v, --verbose       Verbose output (only for 'get' and 'find-non-fitting')
+                        --display-id    Specify display ID (only for 'find-non-fitting')
+                    -h, --help          Show this help
+                    -V, --version       Show program version
                 ", $cmd)
 
         }
@@ -138,9 +174,8 @@ pub fn parse_args(args: &Vec<String>) -> Result<Action, ArgParseError> {
             }
 
             match opt_name {
-                "-h" | "--help" => {
-                    return Ok(Action::Help);
-                }
+                "-h" | "--help"    => return Ok(Action::Help),
+                "-V" | "--version" => return Ok(Action::Version),
 
                 "-m" | "--mode" => {
                     action.add_setting(arg.clone(), |settings| {
@@ -164,31 +199,19 @@ pub fn parse_args(args: &Vec<String>) -> Result<Action, ArgParseError> {
 
                 "-s" | "--since" => {
                     action.add_time_period_option(arg.clone(), |period| {
-                        period.set_since(time_parser::parse_time_to_minutes(&require_opt_value(
-                            opt_name,
-                            &mut opt_value,
-                            &mut iter,
-                        )?)?)
+                        period.set_since(time_parser::parse_time_to_minutes(&require_opt_value(opt_name, &mut opt_value, &mut iter)?)?)
                     })?;
                 }
 
                 "-u" | "--until" => {
                     action.add_time_period_option(arg.clone(), |period| {
-                        period.set_until(time_parser::parse_time_to_minutes(&require_opt_value(
-                            opt_name,
-                            &mut opt_value,
-                            &mut iter,
-                        )?)?)
+                        period.set_until(time_parser::parse_time_to_minutes(&require_opt_value(opt_name, &mut opt_value, &mut iter)?)?)
                     })?;
                 }
 
                 "-d" | "--duration" => {
                     action.add_time_period_option(arg.clone(), |period| {
-                        period.set_duration(time_parser::parse_duration(&require_opt_value(
-                            opt_name,
-                            &mut opt_value,
-                            &mut iter,
-                        )?)?)
+                        period.set_duration(time_parser::parse_duration(&require_opt_value(opt_name, &mut opt_value, &mut iter)?)?)
                     })?;
                 }
 
@@ -200,8 +223,12 @@ pub fn parse_args(args: &Vec<String>) -> Result<Action, ArgParseError> {
                     action.add_unique_option(arg.clone(), UniqueOption::DisplayId(id))?;
                 }
 
-                "--short" => {
-                    action.add_unique_option(arg.clone(), UniqueOption::ShortFlag)?;
+                "-v" | "--verbose" => {
+                    action.add_unique_option(arg.clone(), UniqueOption::VerboseFlag)?;
+                }
+
+                "--socket" => {
+                    util::set_socket_path(&require_opt_value(opt_name, &mut opt_value, &mut iter)?);
                 }
 
                 "--" => allow_options = false,

@@ -29,7 +29,7 @@ macro_rules! bench_wrapper {
     };
 }
 
-const SOCKET_PATH: &str = "/tmp/ywpm.socket";
+const SOCKET_PATH: &str = "/tmp/ywpmd.sock";
 
 fn client_v1(stream: &mut UnixStream, vec: &Vec<String>) -> Result<(), Box<dyn Error>> {
     writer::write_string_vec(stream, vec)?;

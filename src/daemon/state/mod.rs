@@ -16,11 +16,11 @@ pub(crate) use wallpaper::Wallpaper;
 pub(crate) use wallpaper_group::WallpaperGroup;
 pub(crate) use wallpaper_node::{SharedWallpaperNode, WallpaperNode};
 
-#[cfg(test)]
-pub(crate) use display_mode::DisplayModeParseError;
+#[cfg(not(test))]
+mod display_mode_format;
 
 #[cfg(test)]
 pub(crate) mod display_mode_format;
 
-#[cfg(not(test))]
-mod display_mode_format;
+#[cfg(test)]
+pub(crate) use display_mode::DisplayModeParseError;

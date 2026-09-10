@@ -50,6 +50,12 @@ impl ActionSuccess {
     }
 }
 
+impl Into<ActionSuccess> for &str {
+    fn into(self) -> ActionSuccess {
+        ActionSuccess::with_message(self)
+    }
+}
+
 impl Into<ActionSuccess> for String {
     fn into(self) -> ActionSuccess {
         ActionSuccess::with_message(self)

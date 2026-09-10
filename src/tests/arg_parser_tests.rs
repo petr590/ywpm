@@ -41,7 +41,7 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
     assert_eq!(parse_args(&vec_strings![CMD, "list"])?, Action::GetNodeList);
     assert_eq!(
         parse_args(&vec_strings![CMD, "get"])?,
-        Action::GetCurrentWallpaper
+        Action::GetCurrentWallpaper { is_verbose: false }
     );
     assert_eq!(
         parse_args(&vec_strings![CMD, "random"])?,

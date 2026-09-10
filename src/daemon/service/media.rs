@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 
 use display_info::DisplayInfo;
 use ffprobe::FfProbeError;
@@ -13,7 +14,7 @@ use crate::daemon::state::{DisplayMode, SharedWallpaperNode, State, Wallpaper};
 use crate::daemon::warning::Warning;
 
 
-pub fn run(state: &mut State, paths: Vec<String>, display_id: Option<u32>, is_short: bool) -> ActionResult {
+pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Option<u32>, is_verbose: bool) -> ActionResult {
     let (wallpapers, mut total_warning) = if paths.is_empty() {
         state.find_all_child_wallpapers(state.nodes.values())
     } else {
@@ -24,62 +25,55 @@ pub fn run(state: &mut State, paths: Vec<String>, display_id: Option<u32>, is_sh
         state.find_all_child_wallpapers(nodes)
     };
 
-    find_non_fitting(wallpapers, display_id, is_short).map(|warning| {
-        total_warning.append(warning.message());
-        ActionSuccess::with_warning(total_warning)
+    find_non_fitting_of(wallpapers, display_id, is_verbose).map(|success| {
+        total_warning.append(success.warning.message());
+        ActionSuccess {
+            message: success.message,
+            warning: total_warning,
+        }
     })
 }
 
-fn find_non_fitting(wallpapers: IndexSet<Wallpaper>, display_id: Option<u32>, is_short: bool) -> Result<Warning, ActionPerformError> {
+fn find_non_fitting_of(wallpapers: IndexSet<Wallpaper>, display_id: Option<u32>, is_verbose: bool) -> ActionResult {
 
     let display_resol = get_display_resolution(display_id)?;
-    let display_ratio_str = display_resol.ratio_str();
+    let mut message = String::new();
 
-    let (files_info, mut warning) = get_files_info(wallpapers);
+    if is_verbose {
+        let _ = writeln!(message, "Display: {}, {}", display_resol, display_resol.ratio_str());
+    }
 
-    for (path, info) in files_info {
+    let (info_map, warning) = get_media_info(wallpapers);
+
+    for (path, info) in info_map {
         let resol = info.resolution;
 
         if info.is_video {
             if resol != display_resol {
-                if is_short {
-                    warning.append_ln(&format!("{}, {}, {}", resol, resol.ratio_str(), path));
+                if is_verbose {
+                    let _ = writeln!(message, "{}, {}, {}", resol, resol.ratio_str(), path);
                 } else {
-                    warning.append_msg_path(
-                        &format!(
-                            "video resolution ({}) doesn't match with display resolution ({})",
-                            resol, display_resol
-                        ),
-                        &path,
-                    );
+                    let _ = writeln!(message, "{path}");
                 }
             }
         } else {
             if info.mode.is_default() && resol.ratio_equals(&display_resol) {
-                if is_short {
-                    warning.append_ln(&format!("{}, {}, {}", resol, resol.ratio_str(), path));
+                if is_verbose {
+                    let _ = writeln!(message, "{}, {}, {}", resol, resol.ratio_str(), path);
                 } else {
-                    warning.append_msg_path(
-                        &format!(
-                            "image ratio ({}, {}) doesn't match with display ratio ({}, {})",
-                            resol,
-                            resol.ratio_str(),
-                            display_resol,
-                            display_ratio_str
-                        ),
-                        &path,
-                    );
+                    let _ = writeln!(message, "{path}");
                 }
             }
         }
     }
 
-    Ok(warning)
+    Ok(ActionSuccess { message, warning })
 }
 
 
 fn get_display_resolution(display_id: Option<u32>) -> Result<Resolution, ActionPerformError> {
-    let infos = DisplayInfo::all().map_err(|error| ActionPerformError::new(error.to_string()))?;
+    let infos = DisplayInfo::all()
+        .map_err(|error| ActionPerformError::new(error.to_string()))?;
 
     if infos.is_empty() {
         return Err(action_perform_error_localized!(
@@ -107,26 +101,25 @@ fn get_display_resolution(display_id: Option<u32>) -> Result<Resolution, ActionP
         Err(action_perform_error_localized!(
             "More than one display was detected. Use --display-id to specify the display id. Available displays: {}",
             "Обнаружено более одного дисплея. Используйте --display-id чтобы указать id дисплея. Доступные дисплеи: {}",
-            infos
-                .iter()
+            infos.iter()
                 .map(|info| format!("#{} ({}x{})", info.id, info.width, info.height))
                 .join(", ")
         ))
     }
 }
 
-struct FileInfo {
+struct MediaInfo {
     pub resolution: Resolution,
     pub is_video: bool,
     pub mode: DisplayMode,
 }
 
-fn get_files_info<I>(wallpapers: I) -> (HashMap<String, FileInfo>, Warning)
+fn get_media_info<I>(wallpapers: I) -> (HashMap<String, MediaInfo>, Warning)
 where
     I: IntoIterator<Item = Wallpaper, IntoIter: ExactSizeIterator>,
 {
     let iter = wallpapers.into_iter();
-    let mut map = HashMap::with_capacity(iter.len());
+    let mut info_map = HashMap::with_capacity(iter.len());
     let mut rest = Vec::new();
     let mut warning = Warning::new();
 
@@ -137,9 +130,9 @@ where
             Ok(size) => {
                 let Wallpaper { path, mode } = wallpaper;
 
-                let prev = map.insert(
+                let prev = info_map.insert(
                     path,
-                    FileInfo {
+                    MediaInfo {
                         resolution: Resolution::new(size.width as u64, size.height as u64),
                         is_video: false,
                         mode,
@@ -170,7 +163,7 @@ where
                         let Wallpaper { path, mode } = wallpaper;
 
                         let file_info = match (stream.width, stream.height) {
-                            (Some(width), Some(height)) => FileInfo {
+                            (Some(width), Some(height)) => MediaInfo {
                                 resolution: Resolution::new(width as u64, height as u64),
                                 is_video: true,
                                 mode,
@@ -182,7 +175,7 @@ where
                             }
                         };
 
-                        let prev = map.insert(path, file_info);
+                        let prev = info_map.insert(path, file_info);
                         assert!(prev.is_none());
                     }
 
@@ -197,7 +190,7 @@ where
         };
     }
 
-    (map, warning)
+    (info_map, warning)
 }
 
 fn is_codec_type_video(codec_type: &Option<String>) -> bool {

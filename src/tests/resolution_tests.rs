@@ -1,4 +1,4 @@
-use crate::daemon::service::resolution::Resolution;
+use crate::daemon::service::Resolution;
 
 #[test]
 fn resolution_ratio_str_correct() {

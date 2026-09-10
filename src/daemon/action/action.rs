@@ -2,17 +2,19 @@ use crate::daemon::action::{ActionPerformError, ActionResult, ActionSuccess};
 use crate::daemon::arg_parsing::ParsedTimePeriod;
 use crate::daemon::service;
 use crate::daemon::state::{Settings, State};
-use crate::{GET_HELP_MESSAGE, action_perform_error_localized, util};
+use crate::{GET_HELP_MESSAGE, util};
 
 use self::Action::*;
 
 #[derive(Debug, PartialEq)]
 pub enum Action {
     Help,
+    Version,
 
-    GetCurrentWallpaper,
+    GetCurrentWallpaper { is_verbose: bool },
     SetWallpaper { path: String, settings: Settings, period: ParsedTimePeriod },
     SetRandowWallpaper,
+    RestoreWallpaper,
 
     GetNodeList,
     AddNodes    { paths: Vec<String>, settings: Settings },
@@ -28,7 +30,7 @@ pub enum Action {
     ClearGroup      { name: String },
     RemoveGroup     { name: String },
 
-    FindNonFittingWallpapers { paths: Vec<String>, display_id: Option<u32>, is_short: bool },
+    FindNonFittingWallpapers { paths: Vec<String>, display_id: Option<u32>, is_verbose: bool },
 }
 
 impl Action {
@@ -47,20 +49,13 @@ impl Action {
 
     fn perform(self, cmd: &str, state: &mut State) -> ActionResult {
         match self {
-            Help => return Ok(GET_HELP_MESSAGE!(cmd).into()),
+            Help    => return Ok(GET_HELP_MESSAGE!(cmd).into()),
+            Version => return Ok(env!("CARGO_PKG_VERSION").into()),
 
-            GetCurrentWallpaper => {
-                return state.current_wallpaper_path
-                    .clone()
-                    .map(ActionSuccess::with_message)
-                    .ok_or_else(|| action_perform_error_localized!(
-                        "No wallpaper is set",
-                        "Обои не установлены"
-                    ));
-            }
-
+            GetCurrentWallpaper { is_verbose }      => return service::wallpaper::get_current(state, is_verbose),
             SetWallpaper { path, settings, period } => return service::wallpaper::set(state, path, &settings, period),
             SetRandowWallpaper                      => return service::wallpaper::set_random(state),
+            RestoreWallpaper                        => service::wallpaper::restore(state)?,
 
             GetNodeList                  => return Ok(service::node::get_list(state).into()),
             AddNodes { paths, settings } => service::node::add(state, &paths, &settings)?,
@@ -76,8 +71,8 @@ impl Action {
             ClearGroup      { name }                   => service::group::clear(state, &name)?,
             RemoveGroup     { name }                   => service::group::remove(state, &name),
 
-            FindNonFittingWallpapers { paths, display_id, is_short } => {
-                return service::find_non_fitting_wallpapers::run(state, paths, display_id, is_short);
+            FindNonFittingWallpapers { paths, display_id, is_verbose } => {
+                return service::media::find_non_fitting(state, paths, display_id, is_verbose);
             },
         }
 

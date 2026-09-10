@@ -1,5 +1,5 @@
 use once_cell::sync::Lazy;
-use std::{env, fs};
+use std::{cell::RefCell, env, fs, path::PathBuf};
 
 use crate::daemon::arg_parsing::ArgParseError;
 
@@ -11,20 +11,31 @@ pub static IS_RU: Lazy<bool> = Lazy::new(|| {
 });
 
 const PROGRAM_DIR: &str = "ywpm";
-const SOCKET_NAME: &str = "ywpm.sock";
+const SOCKET_NAME: &str = "ywpmd.sock";
 const CONFIG_NAME: &str = "config.yaml";
+
+thread_local! {
+    static SOCKET_PATH: RefCell<Option<String>> = RefCell::new(None);
+}
+
+pub fn set_socket_path(path: impl Into<String>) {
+    SOCKET_PATH.with_borrow_mut(|socket_path| {
+        *socket_path = Some(path.into());
+    });
+}
+
 
 #[cfg(debug_assertions)]
 mod debug {
     use super::*;
     use std::path::PathBuf;
 
-    pub fn get_socket_path() -> PathBuf {
-        PathBuf::from(format!("/tmp/{SOCKET_NAME}"))
+    pub fn get_config_path() -> PathBuf {
+        PathBuf::from(const_str::concat!("/tmp/", PROGRAM_DIR, "/", CONFIG_NAME))
     }
 
-    pub fn get_config_path() -> PathBuf {
-        PathBuf::from(format!("/tmp/{PROGRAM_DIR}/{CONFIG_NAME}"))
+    pub(super) fn get_default_socket_path() -> PathBuf {
+        PathBuf::from(const_str::concat!("/tmp/", SOCKET_NAME))
     }
 }
 
@@ -34,7 +45,13 @@ mod release {
     use std::env;
     use std::path::PathBuf;
 
-    pub fn get_socket_path() -> PathBuf {
+    pub fn get_config_path() -> PathBuf {
+        let mut path = env::home_dir().expect("Couldn't get home directory");
+        path.push(const_str::concat!(".config/", PROGRAM_DIR, "/", CONFIG_NAME));
+        path
+    }
+
+    pub(super) fn get_default_socket_path() -> PathBuf {
         if let Ok(runtime_dir) = env::var("XDG_RUNTIME_DIR") {
             let mut path = PathBuf::from(runtime_dir);
             path.push(SOCKET_NAME);
@@ -42,22 +59,28 @@ mod release {
         }
 
         let mut path = env::home_dir().expect("Couldn't get home directory");
-        path.push(format!(".local/share/{SOCKET_NAME}"));
-        path
-    }
-
-    pub fn get_config_path() -> PathBuf {
-        let mut path = env::home_dir().expect("Couldn't get home directory");
-        path.push(format!(".config/{PROGRAM_DIR}/{CONFIG_NAME}"));
+        path.push(const_str::concat!(".local/share/", SOCKET_NAME));
         path
     }
 }
 
-#[cfg(debug_assertions)]
-pub use debug::*;
+#[cfg(debug_assertions)] pub use debug::get_config_path;
+#[cfg(debug_assertions)] use debug::get_default_socket_path;
 
-#[cfg(not(debug_assertions))]
-pub use release::*;
+#[cfg(not(debug_assertions))] pub use release::get_config_path;
+#[cfg(not(debug_assertions))] use release::get_default_socket_path;
+
+
+pub fn get_socket_path() -> PathBuf {
+    SOCKET_PATH.with_borrow(|path| {
+        if let Some(path) = path {
+            PathBuf::from(path)
+        } else {
+            get_default_socket_path()
+        }
+    })
+}
+
 
 pub fn canonicalize_path(path: &str) -> Result<String, ArgParseError> {
     fs::canonicalize(path)

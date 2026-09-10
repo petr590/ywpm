@@ -1,0 +1,13 @@
+[Unit]
+Description=YoRHa Wallpaper Manager Service
+Requires=default.target
+After=default.target
+
+[Service]
+Type=notify
+EnvironmentFile=-%t/ywpm.env
+ExecStartPre=/usr/libexec/ywpmd-pre.sh %t
+ExecStart=/usr/libexec/ywpmd $YWPM_RESTORE_FLAG
+ExecStopPost=/usr/bin/rm -f %t/ywpmd.sock
+Restart=on-failure
+RestartSec=3

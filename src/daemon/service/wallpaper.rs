@@ -1,11 +1,17 @@
-use std::error::Error;
-
-use crate::daemon::action::ActionResult;
+use crate::{action_perform_error_localized, format_localized};
+use crate::daemon::action::{ActionPerformError, ActionResult, ActionSuccess};
 use crate::daemon::arg_parsing::ParsedTimePeriod;
+use crate::daemon::backend;
 use crate::daemon::state::{Settings, SharedWallpaperNode, State, TimePeriod};
-use crate::format_localized;
 
-pub fn restore(state: &mut State) -> Result<(), Box<dyn Error>> {
+pub fn restore(state: &mut State) -> Result<(), ActionPerformError> {
+    if backend::is_running() {
+        return Err(action_perform_error_localized!(
+            "Wallpaper already restored",
+            "Обои уже восстановлены"
+        ));
+    }
+
     if let Some(current_path) = &state.current_wallpaper_path {
 
         let node = match state.find_closest_node(current_path) {
@@ -29,6 +35,21 @@ pub fn restore(state: &mut State) -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+pub fn get_current(state: &State, is_verbose: bool) -> ActionResult {
+    let path = state.current_wallpaper_path
+        .clone()
+        .ok_or_else(|| action_perform_error_localized!(
+            "No wallpaper is set",
+            "Обои не установлены"
+        ))?;
+    
+    if is_verbose {
+        todo!("get image size")
+    } else {
+        Ok(ActionSuccess::with_message(path))
+    }
 }
 
 pub fn set(state: &mut State, path: impl Into<String>, settings: &Settings, period: ParsedTimePeriod) -> ActionResult {

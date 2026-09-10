@@ -9,7 +9,7 @@ use crate::{arg_parse_error_localized, arg_parse_error_localized_with_usage, uti
 #[derive(PartialEq)]
 pub(crate) enum UniqueOption {
     DisplayId(u32),
-    ShortFlag,
+    VerboseFlag,
 }
 
 #[derive(PartialEq)]
@@ -94,11 +94,13 @@ impl ArgParseAction {
         let name = self.name.as_ref().unwrap().as_str();
 
         let mut action = match name {
-            "help" => return Ok(Action::Help), // Ignore any other options
+            "help"    => return Ok(Action::Help),    // Ignore any other options
+            "version" => return Ok(Action::Version), // Ignore any other options
 
-            "get"    => Action::GetCurrentWallpaper,
-            "set"    => Action::SetWallpaper { path: String::new(), settings: Settings::new(), period: NotSpecified },
-            "random" => Action::SetRandowWallpaper,
+            "get"     => Action::GetCurrentWallpaper { is_verbose: false },
+            "set"     => Action::SetWallpaper { path: String::new(), settings: Settings::new(), period: NotSpecified },
+            "random"  => Action::SetRandowWallpaper,
+            "restore" => Action::RestoreWallpaper,
 
             "list"   => Action::GetNodeList,
             "add"    => Action::AddNodes    { paths: Vec::new(), settings: Settings::new() },
@@ -114,7 +116,7 @@ impl ArgParseAction {
             "clear-group"       => Action::ClearGroup      { name: String::new() },
             "remove-group"      => Action::RemoveGroup     { name: String::new() },
 
-            "find-non-fitting" => Action::FindNonFittingWallpapers { paths: Vec::new(), display_id: None, is_short: false },
+            "find-non-fitting" => Action::FindNonFittingWallpapers { paths: Vec::new(), display_id: None, is_verbose: false },
 
             _ => {
                 return Err(arg_parse_error_localized_with_usage!(
@@ -152,9 +154,9 @@ fn add_args(action_name: &str, mut action: Action, mut args: Vec<String>) -> Res
             Ok(action)
         }
 
-        Action::GetGroup    { ref mut name } |
+        Action::GetGroup    { ref mut name }     |
         Action::SetGroup    { ref mut name, .. } |
-        Action::ClearGroup  { ref mut name } |
+        Action::ClearGroup  { ref mut name }     |
         Action::RemoveGroup { ref mut name } => {
             *name = require_exactly_one(action_name, args, ArgParseError::name_required)?;
             Ok(action)
@@ -264,30 +266,30 @@ fn add_unique_options(action_name: &str, mut action: Action, uniqie_options: Vec
     for option in uniqie_options {
         match option {
             UniqueOption::DisplayId(id) => match action {
-                Action::FindNonFittingWallpapers {
-                    ref mut display_id, ..
-                } => {
+                Action::FindNonFittingWallpapers { ref mut display_id, .. } => {
                     *display_id = Some(id);
                 }
 
                 _ => {
                     return Err(ArgParseError::could_not_set_option(
-                        vec!["--display-id".to_string()],
+                        vec![String::from("--display-id")],
                         action_name,
                     ));
                 }
             },
 
-            UniqueOption::ShortFlag => match action {
-                Action::FindNonFittingWallpapers {
-                    ref mut is_short, ..
-                } => {
-                    *is_short = true;
+            UniqueOption::VerboseFlag => match action {
+                Action::GetCurrentWallpaper      { ref mut is_verbose } |
+                Action::FindNonFittingWallpapers { ref mut is_verbose, .. } => {
+                    *is_verbose = true;
                 }
 
                 _ => {
                     return Err(ArgParseError::could_not_set_option(
-                        vec!["--display-id".to_string()],
+                        vec![
+                            String::from("-v"),
+                            String::from("--verbose")
+                        ],
                         action_name,
                     ));
                 }
@@ -340,6 +342,7 @@ fn validate_paths(mut action: Action) -> Result<Action, ArgParseError> {
         Action::AddToGroup               { ref mut paths, .. } |
         Action::RemoveFromGroup          { ref mut paths, .. } |
         Action::FindNonFittingWallpapers { ref mut paths, .. } => {
+
             let mut unique_paths = HashSet::with_capacity(paths.len());
             let mut new_paths = Vec::with_capacity(paths.len());
 
