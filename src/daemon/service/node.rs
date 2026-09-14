@@ -1,9 +1,9 @@
 use itertools::Itertools;
 
 use crate::daemon::action::ActionPerformError;
-use crate::daemon::arg_parsing::ParsedTimePeriod;
+use crate::daemon::arg_parsing::{ParsedTimePeriod, Settings};
 use crate::daemon::backend;
-use crate::daemon::state::{Settings, State, Wallpaper};
+use crate::daemon::state::{State, Wallpaper};
 
 pub fn get_list(state: &State) -> String {
     if state.nodes.is_empty() {
@@ -18,14 +18,14 @@ pub fn get_list(state: &State) -> String {
     }
 }
 
-pub fn add(state: &mut State, paths: &Vec<String>, settings: &Settings) -> Result<(), ActionPerformError> {
+pub fn add(state: &mut State, paths: &Vec<String>, settings: &Settings, period: ParsedTimePeriod) -> Result<(), ActionPerformError> {
     let mut update_current = false;
 
     for path in paths {
-        state.update_node(path, settings, ParsedTimePeriod::NotSpecified);
-        update_current = update_current
-            || state
-                .current_wallpaper_path
+        state.update_node(path, settings, period.clone());
+        
+        update_current = update_current ||
+            state.current_wallpaper_path
                 .as_ref()
                 .is_some_and(|p| path.starts_with(p));
     }

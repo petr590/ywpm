@@ -1,16 +1,20 @@
+use clap::{CommandFactory, Parser};
+use clap::error::ErrorKind;
 use nix::errno::Errno;
 use nix::poll::{self, PollFd, PollFlags};
 use nix::sys::signal::{SigSet, Signal};
 use nix::sys::signalfd::{SfdFlags, SignalFd};
 use sd_notify::NotifyState;
+use ywpm::daemon::arg_parsing::Cli;
 use std::env;
 use std::error::Error;
 use std::io::{self, BufReader, BufWriter};
 use std::os::fd::AsFd;
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::Path;
 use std::process::exit;
 
-use ywpm::daemon::arg_parsing;
+use ywpm::daemon::action::ActionPerformError;
 use ywpm::daemon::backend;
 use ywpm::daemon::service::{config, wallpaper};
 use ywpm::daemon::state::State;
@@ -19,40 +23,71 @@ use ywpm::{reader, util, writer};
 fn main() -> Result<(), Box<dyn Error>> {
     let mut state = config::read_or_create_empty(util::get_config_path())?;
 
-    let args: Vec<String> = env::args().collect();
-    if args.len() > 1 {
-        perform_initial_action(&args, &mut state);
-    }
+    let socket = if env::args().count() > 1 {
+        perform_initial_action_or_exit(&mut state)
+    } else {
+        None
+    };
 
-    main_loop(state)
+    let socket = socket.unwrap_or_else(util::get_socket_path);
+
+    main_loop(state, socket)
 }
 
-fn perform_initial_action(args: &Vec<String>, state: &mut State) {
-    match arg_parsing::parse_args(&args) {
-        Ok(action) => match action.perform_and_update_config(&args[0], state) {
-            Ok(success) => println!("{success}"),
-            Err(err) => {
-                eprintln!("{}", err.message());
-                exit(1);
+fn perform_initial_action_or_exit(state: &mut State) -> Option<String> {
+
+    match perform_initial_action(state) {
+        Ok(socket) => return socket,
+
+        Err(ref err) if let Some(err) = err.downcast_ref::<clap::Error>() => {
+            match err.kind() {
+                ErrorKind::DisplayHelp |
+                ErrorKind::DisplayVersion => {
+                    println!("{}", err.render());
+                    exit(0);
+                }
+
+                _ => {
+                    eprintln!("{}", err.render());
+                    exit(1);
+                }
             }
-        },
+        }
 
         Err(err) => {
-            eprintln!("{}", err.message());
+            eprintln!("{}", err.to_string());
             exit(1);
         }
     }
 }
 
-fn main_loop(mut state: State) -> Result<(), Box<dyn Error>> {
-    let socket_path = util::get_socket_path();
+fn perform_initial_action(state: &mut State) -> Result<Option<String>, Box<dyn Error>> {
+    let mut cli = Cli::try_parse()?;
+
+    let socket = cli.socket().clone();
+
+    if cli.subcommand().is_some() {
+        cli.canonicalize_paths(
+            env::current_dir()?
+                .to_str().unwrap_or_default()
+        )?;
+
+        cli.perform_and_update_config(state)?;
+    }
+
+    Ok(socket)
+}
+
+
+fn main_loop(mut state: State, socket_path: impl AsRef<Path>) -> Result<(), Box<dyn Error>> {
+    let socket_path = socket_path.as_ref();
 
     println!(
         "Connecting to socket: '{}'...",
-        socket_path.to_str().unwrap_or_default()
+        socket_path.to_string_lossy()
     );
 
-    let listener = UnixListener::bind(&socket_path)?;
+    let listener = UnixListener::bind(socket_path)?;
     listener.set_nonblocking(true)?;
 
     let signal_fd = get_signal_fd()?;
@@ -88,7 +123,7 @@ fn main_loop(mut state: State) -> Result<(), Box<dyn Error>> {
                 {
                     println!("\nReceived shutdown signal! Exiting gracefully...");
 
-                    let _ = std::fs::remove_file(&socket_path);
+                    let _ = std::fs::remove_file(socket_path);
 
                     state.clear_expired_peroids();
 
@@ -127,17 +162,32 @@ fn get_signal_fd() -> Result<SignalFd, Errno> {
 }
 
 fn handle_client(mut stream: UnixStream, state: &mut State) -> Result<(), Box<dyn Error>> {
-    let args = reader::read_string_vec(&mut BufReader::new(&mut stream))?;
+    let mut buf_reader = BufReader::new(&mut stream);
+
+    let cwd = reader::read_string(&mut buf_reader)?;
+    let args = reader::read_string_vec(&mut buf_reader)?;
 
     let mut writer = BufWriter::new(&mut stream);
 
-    match arg_parsing::parse_args(&args) {
-        Ok(action) => match action.perform_and_update_config(&args[0], state) {
-            Ok(success) => writer::write_ok(&mut writer, success)?,
-            Err(error) => writer::write_error(&mut writer, error.message())?,
+    match Cli::try_parse_from(&args) {
+        Ok(cli) if cli.subcommand().is_none() => {
+            writer::write_error(&mut writer, &Cli::command().render_long_help().to_string())?;
+        }
+
+        Ok(mut cli) => {
+            let result = cli.canonicalize_paths(&cwd)
+                .map_err(|err| ActionPerformError::new(err.message()))
+                .and_then(|()| cli.perform_and_update_config(state));
+
+            match result {
+                Ok(success) => writer::write_ok(&mut writer, success)?,
+                Err(error) => writer::write_error(&mut writer, error.message())?,
+            }
         },
 
-        Err(error) => writer::write_error(&mut writer, error.message())?,
+        Err(error) => {
+            writer::write_error(&mut writer, &error.render().to_string())?;
+        },
     }
 
     Ok(())

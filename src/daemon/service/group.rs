@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use itertools::Itertools;
 
 use crate::daemon::action::{ActionPerformError, ActionResult, ActionSuccess};
-use crate::daemon::arg_parsing::ParsedTimePeriod;
-use crate::daemon::state::{Settings, SharedWallpaperNode, State, TimePeriod, WallpaperGroup};
+use crate::daemon::arg_parsing::{ParsedTimePeriod, Settings};
+use crate::daemon::state::{SharedWallpaperNode, State, TimePeriod, WallpaperGroup};
 use crate::{action_perform_error_localized, format_localized};
 
 pub fn get_list(state: &State) -> String {

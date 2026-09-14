@@ -78,14 +78,14 @@ fn format_options(mut options: Vec<String>) -> String {
 #[macro_export]
 macro_rules! arg_parse_error_localized {
     ($en_fmt:expr, $ru_fmt:expr $(, $arg:expr)* $(,)?) => {
-        crate::daemon::arg_parsing::error::ArgParseError::new(crate::format_localized!($en_fmt, $ru_fmt $(, $arg)*))
+        crate::daemon::arg_parsing::ArgParseError::new(crate::format_localized!($en_fmt, $ru_fmt $(, $arg)*))
     };
 }
 
 #[macro_export]
 macro_rules! arg_parse_error_localized_with_usage {
     ($en_fmt:expr, $ru_fmt:expr, $cmd:expr $(, $arg:expr)* $(,)?) => {
-        crate::daemon::arg_parsing::error::ArgParseError::new(
+        crate::daemon::arg_parsing::ArgParseError::new(
             if *crate::util::IS_RU {
                 $crate::indoc::formatdoc! {
                     "

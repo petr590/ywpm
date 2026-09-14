@@ -1,5 +1,3 @@
-pub(crate) use indoc;
-
 pub mod daemon;
 pub mod reader;
 pub mod util;

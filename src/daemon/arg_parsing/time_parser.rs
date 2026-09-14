@@ -65,9 +65,9 @@ pub(crate) fn parse_time_to_minutes(input: &str) -> Result<NaiveDateTime, ArgPar
         .unwrap())
 }
 
-static ZERO_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^0+$").unwrap());
-static NUM_AND_UNIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\d+)\s*(\w+)$").unwrap());
-static TIME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\d+):(\d{1,2})$").unwrap());
+static ZERO_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^0+$").unwrap());
+static NUM_AND_UNIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^(\d+)\s*(\w+)$").unwrap());
+static TIME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^(\d+):(\d{1,2})$").unwrap());
 
 pub(crate) fn parse_duration(input: &str) -> Result<Duration, ArgParseError> {
     let input = input.trim().to_lowercase();

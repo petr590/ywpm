@@ -21,6 +21,15 @@ pub fn read_string_vec(reader: &mut impl Read) -> Result<Vec<String>, ReadError>
     Ok(vec)
 }
 
+pub fn read_string(reader: &mut impl Read) -> Result<String, ReadError> {
+    let len = read_size(reader)?;
+
+    let mut buf = vec![0u8; len];
+    reader.read_exact(&mut buf).map_err(ReadError::Io)?;
+    Ok(String::from_utf8(buf).map_err(ReadError::FromUtf8)?)
+}
+
+
 pub fn read_response(reader: &mut impl Read) -> Result<ActionResult, ReadError> {
     let enum_tag = read_u8(reader)?;
 
@@ -50,12 +59,4 @@ fn read_size(reader: &mut impl Read) -> Result<usize, ReadError> {
     let mut buf = [0u8; 8];
     reader.read_exact(&mut buf).map_err(ReadError::Io)?;
     Ok(u64::from_be_bytes(buf) as usize)
-}
-
-fn read_string(reader: &mut impl Read) -> Result<String, ReadError> {
-    let len = read_size(reader)?;
-
-    let mut buf = vec![0u8; len];
-    reader.read_exact(&mut buf).map_err(ReadError::Io)?;
-    Ok(String::from_utf8(buf).map_err(ReadError::FromUtf8)?)
 }

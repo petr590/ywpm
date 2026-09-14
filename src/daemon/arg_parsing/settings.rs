@@ -1,11 +1,16 @@
-use std::cell::RefMut;
+use std::{cell::RefMut, str::FromStr};
+
+use clap::Args;
 
 use crate::daemon::state::{DisplayMode, WallpaperNode};
 
 /// Настройки для WallpaperNode. Каждое значение опционально, так как юзер может задать или не задать определённую настройку.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Args)]
 pub struct Settings {
+    #[arg(short, long, value_parser = DisplayMode::from_str)]
     pub mode: Option<DisplayMode>,
+
+    #[arg(short, long)]
     pub recursive_level: Option<u16>,
 }
 

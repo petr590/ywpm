@@ -1,8 +1,8 @@
 use crate::{action_perform_error_localized, format_localized};
 use crate::daemon::action::{ActionPerformError, ActionResult, ActionSuccess};
-use crate::daemon::arg_parsing::ParsedTimePeriod;
+use crate::daemon::arg_parsing::{ParsedTimePeriod, Settings};
 use crate::daemon::backend;
-use crate::daemon::state::{Settings, SharedWallpaperNode, State, TimePeriod};
+use crate::daemon::state::{SharedWallpaperNode, State, TimePeriod};
 
 pub fn restore(state: &mut State) -> Result<(), ActionPerformError> {
     if backend::is_running() {
@@ -70,6 +70,11 @@ pub fn set(state: &mut State, path: impl Into<String>, settings: &Settings, peri
 
 pub fn set_random(state: &mut State) -> ActionResult {
     set_node(state, state.find_actual_nodes().iter())
+}
+
+pub fn reset(state: &mut State) {
+    backend::stop();
+    state.current_wallpaper_path = None;
 }
 
 fn set_node<'a>(state: &mut State, nodes: impl IntoIterator<Item = &'a SharedWallpaperNode>) -> ActionResult {

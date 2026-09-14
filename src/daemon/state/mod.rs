@@ -1,6 +1,5 @@
 mod display_mode;
 mod dtos;
-mod settings;
 mod state;
 mod time_period;
 mod wallpaper;
@@ -10,7 +9,6 @@ mod wallpaper_node;
 pub use state::State;
 
 pub(crate) use display_mode::{AlignX, AlignY, DisplayMode, FitMode};
-pub(crate) use settings::Settings;
 pub(crate) use time_period::TimePeriod;
 pub(crate) use wallpaper::Wallpaper;
 pub(crate) use wallpaper_group::WallpaperGroup;

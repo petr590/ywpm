@@ -1,23 +1,17 @@
 use std::error::Error;
 use std::{env, fs};
 
-use chrono::{Days, Local, NaiveDate, Timelike};
+use chrono::{Days, Duration, Local, NaiveDate, Timelike};
+use clap::Parser;
+use clap::error::ErrorKind;
 
 use crate::assert_is_err;
-use crate::daemon::action::Action;
-use crate::daemon::arg_parsing::{ParsedTimePeriod, parse_args};
-use crate::daemon::state::{AlignX, AlignY, DisplayMode, FitMode, Settings, TimePeriod};
-use crate::util;
+use crate::daemon::arg_parsing::{ActionSubcommand, Cli, CliTimePeriod, Settings};
+use crate::daemon::state::{AlignX, AlignY, DisplayMode, FitMode};
 
 macro_rules! vec_strings {
     ($($item:expr),* $(,)?) => {
         vec![$(String::from($item)),*]
-    };
-}
-
-macro_rules! vec_canonicalized_paths {
-    ($($item:expr),* $(,)?) => {
-        vec![$(util::canonicalize_path($item)?),*]
     };
 }
 
@@ -35,35 +29,40 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
     setup_dirs();
 
     assert_eq!(
-        parse_args(&vec_strings![CMD, "help", "--mode", "center"])?,
-        Action::Help
-    );
-    assert_eq!(parse_args(&vec_strings![CMD, "list"])?, Action::GetNodeList);
-    assert_eq!(
-        parse_args(&vec_strings![CMD, "get"])?,
-        Action::GetCurrentWallpaper { is_verbose: false }
-    );
-    assert_eq!(
-        parse_args(&vec_strings![CMD, "random"])?,
-        Action::SetRandowWallpaper
-    );
-    assert_eq!(
-        parse_args(&vec_strings![CMD, "group-list"])?,
-        Action::GetGroupList
+        *Cli::parse_from([CMD]).subcommand(),
+        None
     );
 
     assert_eq!(
-        parse_args(&vec_strings![
-            CMD,
-            "--mode",
-            "contain top right",
-            "-r",
-            "3",
-            "set",
-            "/tmp/ywpm-test/a"
-        ])?,
-        Action::SetWallpaper {
-            path: util::canonicalize_path("/tmp/ywpm-test/a")?,
+        Cli::try_parse_from([CMD, "help"]).unwrap_err().kind(),
+        ErrorKind::DisplayHelp
+    );
+
+    assert_eq!(
+        *Cli::parse_from([CMD, "list"]).subcommand(),
+        Some(ActionSubcommand::GetNodeList)
+    );
+
+    assert_eq!(
+        *Cli::parse_from([CMD, "get"]).subcommand(),
+        Some(ActionSubcommand::GetCurrentWallpaper)
+    );
+
+    assert_eq!(
+        *Cli::parse_from([CMD, "random"]).subcommand(),
+        Some(ActionSubcommand::SetRandowWallpaper)
+    );
+
+    assert_eq!(
+        *Cli::parse_from([CMD, "group-list"]).subcommand(),
+        Some(ActionSubcommand::GetGroupList)
+    );
+
+    assert_eq!(
+        *Cli::parse_from([CMD, "set", "--mode", "contain top right", "-r", "3", "/tmp/ywpm-test/a"]).subcommand(),
+
+        Some(ActionSubcommand::SetWallpaper {
+            path: String::from("/tmp/ywpm-test/a"),
             settings: Settings {
                 recursive_level: Some(3),
                 mode: Some(DisplayMode {
@@ -72,14 +71,15 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
                     align_y: AlignY::Top,
                 }),
             },
-            period: ParsedTimePeriod::NotSpecified
-        }
+            period: CliTimePeriod { since: None, until: None, duration: None }
+        })
     );
 
     assert_eq!(
-        parse_args(&vec_strings![CMD, "add", "-m", "top", "./b/c"])?,
-        Action::AddNodes {
-            paths: vec_canonicalized_paths!["./b/c"],
+        *Cli::parse_from([CMD, "add", "-m", "top", "./b/c"]).subcommand(),
+
+        Some(ActionSubcommand::AddNodes {
+            paths: vec_strings!["./b/c"],
             settings: Settings {
                 recursive_level: None,
                 mode: Some(DisplayMode {
@@ -88,138 +88,106 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
                     align_y: AlignY::Top,
                 }),
             }
-        }
+        })
     );
 
     assert_eq!(
-        parse_args(&vec_strings![CMD, "remove", "/tmp", "./b/c", "../x/y/z"])?,
-        Action::RemoveNodes {
-            paths: vec_canonicalized_paths!["/tmp", "./b/c", "../x/y/z"]
-        }
+        *Cli::parse_from([CMD, "remove", "/tmp", "./b/c", "../x/y/z"]).subcommand(),
+        
+        Some(ActionSubcommand::RemoveNodes {
+            paths: vec_strings!["/tmp", "./b/c", "../x/y/z"]
+        })
     );
 
     assert_eq!(
-        parse_args(&vec_strings![
-            CMD,
-            "new-group",
-            "chebureki",
-            "/tmp",
-            "../x/y/z"
-        ])?,
-        Action::NewGroup {
+        *Cli::parse_from([CMD, "new-group", "chebureki", "/tmp", "../x/y/z"]).subcommand(),
+
+        Some(ActionSubcommand::NewGroup {
             name: String::from("chebureki"),
-            paths: vec_canonicalized_paths!["/tmp", "../x/y/z"],
-        }
+            paths: vec_strings!["/tmp", "../x/y/z"],
+        })
     );
 
     assert_eq!(
-        parse_args(&vec_strings![CMD, "get-group", "chebureki"])?,
-        Action::GetGroup {
+        *Cli::parse_from([CMD, "get-group", "chebureki"]).subcommand(),
+        
+        Some(ActionSubcommand::GetGroup {
             name: String::from("chebureki")
-        }
+        })
     );
 
-    let now = Local::now()
-        .naive_local()
-        .with_second(0)
-        .unwrap()
-        .with_nanosecond(0)
-        .unwrap();
+    let now = Local::now().naive_local()
+        .with_second(0).unwrap()
+        .with_nanosecond(0).unwrap();
 
     assert_eq!(
-        parse_args(&vec_strings![
-            CMD,
-            "set-group",
-            "-s=now",
-            "-u=tomorrow",
-            "-r=10",
-            "chebureki"
-        ])?,
-        Action::SetGroup {
+        *Cli::parse_from([CMD, "set-group", "-s=now", "-u=tomorrow", "-r=10", "chebureki"]).subcommand(),
+
+        Some(ActionSubcommand::SetGroup {
             name: String::from("chebureki"),
             settings: Settings {
                 mode: None,
                 recursive_level: Some(10)
             },
-            period: ParsedTimePeriod::Set(TimePeriod::new(
-                now,
-                (now.date() + Days::new(1)).and_hms_opt(0, 0, 0).unwrap()
-            ))
-        }
+            period: CliTimePeriod {
+                since: Some(now),
+                until: Some((now.date() + Days::new(1)).and_hms_opt(0, 0, 0).unwrap()),
+                duration: None,
+            }
+        })
     );
 
     assert_eq!(
-        parse_args(&vec_strings![
-            CMD,
-            "set-group",
-            "-s",
-            "3500-08-08 20:05",
-            "-d=10h",
-            "-r",
-            "65535",
-            "chebureki"
-        ])?,
-        Action::SetGroup {
+        *Cli::parse_from([CMD, "set-group", "-s", "3500-08-08 20:05", "-d=10h", "-r", "65535", "chebureki"]).subcommand(),
+
+        Some(ActionSubcommand::SetGroup {
             name: String::from("chebureki"),
             settings: Settings {
                 mode: None,
                 recursive_level: Some(65535)
             },
-            period: ParsedTimePeriod::Set(TimePeriod::new(
-                NaiveDate::from_ymd_opt(3500, 8, 8)
-                    .unwrap()
-                    .and_hms_opt(20, 5, 0)
-                    .unwrap(),
-                NaiveDate::from_ymd_opt(3500, 8, 9)
-                    .unwrap()
-                    .and_hms_opt(6, 5, 0)
-                    .unwrap(),
-            ))
-        }
+            period: CliTimePeriod {
+                since: Some(
+                    NaiveDate::from_ymd_opt(3500, 8, 8).unwrap()
+                        .and_hms_opt(20, 5, 0).unwrap()
+                ),
+
+                duration: Some(Duration::hours(10)),
+
+                until: None,
+            }
+        })
     );
 
     assert_eq!(
-        parse_args(&vec_strings![
-            CMD,
-            "add-to-group",
-            "chebureki",
-            "../x/y/z",
-            "."
-        ])?,
-        Action::AddToGroup {
+        *Cli::parse_from([CMD, "add-to-group", "chebureki", "../x/y/z", "."]).subcommand(),
+        Some(ActionSubcommand::AddToGroup {
             name: String::from("chebureki"),
-            paths: vec_canonicalized_paths!["../x/y/z", "."],
-        }
+            paths: vec_strings!["../x/y/z", "."],
+        })
     );
 
     assert_eq!(
-        parse_args(&vec_strings![
-            CMD,
-            "remove-from-group",
-            "chebureki",
-            "../x/y/z",
-            ".",
-            "--",
-            "-x"
-        ])?,
-        Action::RemoveFromGroup {
+        *Cli::parse_from([CMD, "remove-from-group", "chebureki", "../x/y/z", ".", "--", "-x"]).subcommand(),
+
+        Some(ActionSubcommand::RemoveFromGroup {
             name: String::from("chebureki"),
-            paths: vec_canonicalized_paths!["../x/y/z", ".", "-x"],
-        }
+            paths: vec_strings!["../x/y/z", ".", "-x"],
+        })
     );
 
     assert_eq!(
-        parse_args(&vec_strings![CMD, "clear-group", "chebureki"])?,
-        Action::ClearGroup {
+        *Cli::parse_from([CMD, "clear-group", "chebureki"]).subcommand(),
+        Some(ActionSubcommand::ClearGroup {
             name: String::from("chebureki")
-        }
+        })
     );
 
     assert_eq!(
-        parse_args(&vec_strings![CMD, "remove-group", "chebureki"])?,
-        Action::RemoveGroup {
+        *Cli::parse_from([CMD, "remove-group", "chebureki"]).subcommand(),
+        Some(ActionSubcommand::RemoveGroup {
             name: String::from("chebureki")
-        }
+        })
     );
 
     Ok(())
@@ -229,13 +197,13 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
 fn parse_args_errors() {
     setup_dirs();
 
-    assert_is_err!(parse_args(&vec_strings![CMD]));
-    assert_is_err!(parse_args(&vec_strings![CMD, ""]));
-    assert_is_err!(parse_args(&vec_strings![CMD, "-x"]));
-    assert_is_err!(parse_args(&vec_strings![CMD, "-m", "center", "get"]));
-    assert_is_err!(parse_args(&vec_strings![CMD, "-u", "23:00", "remove", "."]));
-    assert_is_err!(parse_args(&vec_strings![CMD, "remove"]));
-    assert_is_err!(parse_args(&vec_strings![CMD, "-u", "123", "set", "."]));
-    assert_is_err!(parse_args(&vec_strings![CMD, "add", "chebureki", "-m"]));
-    assert_is_err!(parse_args(&vec_strings![CMD, "add", "chebureki", "-m=abc"]));
+    assert_is_err!(Cli::try_parse_from([CMD, ""]));
+    assert_is_err!(Cli::try_parse_from([CMD, "-x"]));
+    assert_is_err!(Cli::try_parse_from([CMD, "get", "-m", "center"]));
+    assert_is_err!(Cli::try_parse_from([CMD, "-m", "center", "get"]));
+    assert_is_err!(Cli::try_parse_from([CMD, "-u", "23:00", "remove", "."]));
+    assert_is_err!(Cli::try_parse_from([CMD, "remove"]));
+    assert_is_err!(Cli::try_parse_from([CMD, "-u", "123", "set", "."]));
+    assert_is_err!(Cli::try_parse_from([CMD, "add", "chebureki", "-m"]));
+    assert_is_err!(Cli::try_parse_from([CMD, "add", "chebureki", "-m=abc"]));
 }

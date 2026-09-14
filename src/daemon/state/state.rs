@@ -13,12 +13,11 @@ use walkdir::WalkDir;
 
 use crate::action_perform_error_localized;
 use crate::daemon::action::ActionPerformError;
-use crate::daemon::arg_parsing::ParsedTimePeriod;
+use crate::daemon::arg_parsing::{ParsedTimePeriod, Settings};
 use crate::daemon::backend;
 use crate::daemon::state::dtos::StateDto;
 use crate::daemon::state::{
-    DisplayMode, Settings, SharedWallpaperNode, TimePeriod, Wallpaper, WallpaperGroup,
-    WallpaperNode,
+    DisplayMode, SharedWallpaperNode, TimePeriod, Wallpaper, WallpaperGroup, WallpaperNode,
 };
 use crate::daemon::warning::Warning;
 

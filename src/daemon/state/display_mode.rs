@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{error::Error, fmt};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -26,6 +26,8 @@ pub enum AlignY {
 
 #[derive(Debug)]
 pub struct DisplayModeParseError;
+
+impl Error for DisplayModeParseError {}
 
 impl fmt::Display for DisplayModeParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
