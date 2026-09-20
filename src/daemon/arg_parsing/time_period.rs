@@ -1,16 +1,22 @@
 use chrono::{Duration, Local, NaiveDateTime, Timelike};
 use clap::Args;
+use indoc::indoc;
 
 use crate::action_perform_error_localized;
 use crate::daemon::action::ActionPerformError;
 use crate::daemon::arg_parsing::{ParsedTimePeriod, time_parser};
 use crate::daemon::state::TimePeriod;
+use crate::str_localized;
 
 #[derive(Debug, PartialEq, Args)]
 pub struct CliTimePeriod {
     #[arg(
         short, long,
-        value_parser = time_parser::parse_time_to_minutes
+        value_parser = time_parser::parse_time_to_minutes,
+        help = str_localized!(
+            "Period start (default: now). Format: \"14:00\", \"2026-06-11 12:00\"",
+            "Начало периода (по умолчанию: now). Формат: \"14:00\", \"2026-06-11 12:00\""
+        )
     )]
     pub(crate) since: Option<NaiveDateTime>,
 
@@ -18,6 +24,10 @@ pub struct CliTimePeriod {
         short, long,
         value_parser = time_parser::parse_time_to_minutes,
         conflicts_with = "duration",
+        help = str_localized!(
+            "Period end. Format: date/time, now, tomorrow",
+            "Конец периода. Формат: дата/время, now, tomorrow"
+        )
     )]
     pub(crate) until: Option<NaiveDateTime>,
 
@@ -25,6 +35,16 @@ pub struct CliTimePeriod {
         short, long,
         value_parser = time_parser::parse_duration,
         conflicts_with = "until",
+        help = str_localized!(
+            indoc! {"
+                Period duration (e.g.: 30m, 40 minutes, 12h, 3d, 2w, 5 month, 1 year, 20:30).
+                Months and years are counted as 30 and 365 days, respectively
+            "},
+            indoc! {"
+                Длительность периода (например: 30m, 40 minutes, 12h, 3d, 2w, 5 month, 1 year,
+                20:30). Месяцы и годы считаются по 30 и 365 дней соответственно
+            "}
+        )
     )]
     pub(crate) duration: Option<Duration>,
 }

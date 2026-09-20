@@ -12,6 +12,16 @@ use crate::daemon::state::State;
 use crate::{str_localized, util};
 
 
+macro_rules! GROUP_NAME {
+    () => {
+        str_localized!(
+            "Group name",
+            "Имя группы"
+        )
+    }
+}
+
+
 #[derive(Debug, PartialEq, Subcommand)]
 pub enum ActionSubcommand {
     #[command(
@@ -32,6 +42,10 @@ pub enum ActionSubcommand {
         )
     )]
     SetWallpaper {
+        #[arg(help = str_localized!(
+            "Path to the file/folder",
+            "Путь к файлу/папке"
+        ))]
         path: String,
 
         #[command(flatten)]
@@ -90,7 +104,14 @@ pub enum ActionSubcommand {
         )
     )]
     AddNodes {
-        #[arg(required = true, num_args = 1..)]
+        #[arg(
+            required = true,
+            num_args = 1..,
+            help = str_localized!(
+                "Mandatory list of paths",
+                "Обязательный список путей"
+            )
+        )]
         paths: Vec<String>,
 
         #[command(flatten)]
@@ -109,7 +130,14 @@ pub enum ActionSubcommand {
         )
     )]
     RemoveNodes {
-        #[arg(required = true, num_args = 1..)]
+        #[arg(
+            required = true,
+            num_args = 1..,
+            help = str_localized!(
+                "Mandatory list of paths",
+                "Обязательный список путей"
+            )
+        )]
         paths: Vec<String>,
     },
 
@@ -134,37 +162,35 @@ pub enum ActionSubcommand {
     GetGroupList,
 
 
-    #[command(
-        about = str_localized!(
-            "Show information and group's composition",
-            "Показать информацию и состав группы"
-        )
-    )]
+    #[command(about = str_localized!(
+        "Show information and group's composition",
+        "Показать информацию и состав группы"
+    ))]
     GetGroup {
+        #[arg(help = GROUP_NAME!())]
         name: String
     },
 
 
-    #[command(
-        about = str_localized!(
-            "Create new group",
-            "Создать новую группу"
-        )
-    )]
+    #[command(about = str_localized!(
+        "Create new group",
+        "Создать новую группу"
+    ))]
     NewGroup {
+        #[arg(help = GROUP_NAME!())]
         name: String,
 
-        #[arg(num_args = 0..)] paths: Vec<String>,
+        #[arg(num_args = 0..)]
+        paths: Vec<String>,
     },
 
 
-    #[command(
-        about = str_localized!(
-            "Set random wallpapers from group",
-            "Установить рандомные обои из группы"
-        )
-    )]
+    #[command(about = str_localized!(
+        "Set random wallpapers from group",
+        "Установить рандомные обои из группы"
+    ))]
     SetGroup {
+        #[arg(help = GROUP_NAME!())]
         name: String,
 
         #[command(flatten)] settings: Settings,
@@ -172,13 +198,12 @@ pub enum ActionSubcommand {
     },
 
 
-    #[command(
-        about = str_localized!(
-            "Add files/folders to group",
-            "Добавить файлы/папки в группу"
-        )
-    )]
+    #[command(about = str_localized!(
+        "Add files/folders to group",
+        "Добавить файлы/папки в группу"
+    ))]
     AddToGroup {
+        #[arg(help = GROUP_NAME!())]
         name: String,
 
         #[arg(required = true, num_args = 1..)]
@@ -186,13 +211,12 @@ pub enum ActionSubcommand {
     },
 
 
-    #[command(
-        about = str_localized!(
-            "Remove files/folders from group (not from disk)",
-            "Удалить файлы/папки из группы (не с диска)"
-        )
-    )]
+    #[command(about = str_localized!(
+        "Remove files/folders from group (not from disk)",
+        "Удалить файлы/папки из группы (не с диска)"
+    ))]
     RemoveFromGroup {
+        #[arg(help = GROUP_NAME!())]
         name: String,
 
         #[arg(required = true, num_args = 1..)]
@@ -200,24 +224,25 @@ pub enum ActionSubcommand {
     },
 
 
-    #[command(
-        about = str_localized!(
-            "Clear group",
-            "Очистить группу"
-        )
-    )]
+    #[command(about = str_localized!(
+        "Clear group",
+        "Очистить группу"
+    ))]
     ClearGroup {
+        #[arg(help = GROUP_NAME!())]
         name: String
     },
 
 
-    #[command(
-        about = str_localized!(
-            "Remove group",
-            "Удалить группу"
-        )
-    )]
+    #[command(about = str_localized!(
+        "Remove group",
+        "Удалить группу"
+    ))]
     RemoveGroup {
+        #[arg(help = str_localized!(
+            "Group name",
+            "Имя группы"
+        ))]
         name: String
     },
 
@@ -226,27 +251,34 @@ pub enum ActionSubcommand {
         name = "find-non-fitting",
         about = str_localized!(
             indoc! {"
-                Find all images and videos whose aspect ratio
-                differs from monitor and for which --mode is
-                not specified. For videos, it also checks for
-                pixel-by-pixel resolution matching, as real-time
+                Find all images and videos whose aspect ratio differs from monitor and for which --mode is
+                not specified. For videos, it also checks for pixel-by-pixel resolution matching, as real-time
                 video scaling is expensive operation.
             "},
             indoc! {"
-                Найти все изображения и видео, у которых
-                соотношение сторон отличаеся от монитора и для
-                которых не задан --mode. Для видео также проверяет
-                попиксельное совпадение разрешения, так как
-                масштабирование видео в реальном времени -
-                недешёвая операция.
+                Найти все изображения и видео, у которых соотношение сторон отличаеся от монитора и для
+                которых не задан --mode. Для видео также проверяет попиксельное совпадение разрешения, так как
+                масштабирование видео в реальном времени - недешёвая операция.
             "}
         )
     )]
     FindNonFittingWallpapers {
-        #[arg(required = true, num_args = 1..)]
+        #[arg(
+            num_args = 0..,
+            help = str_localized!(
+                "A list of paths for searching. If not specified, list of paths from DB is used",
+                "Список путей для поиска. Если не задано, используется список путей из БД"
+            )
+        )]
         paths: Vec<String>,
 
-        #[arg(long)]
+        #[arg(
+            long,
+            help = str_localized!(
+                "Display ID if there is more than one display on the computer",
+                "ID дисплея в случае, если на компьютере более одного дисплея"
+            )
+        )]
         display_id: Option<u32>,
     },
 }

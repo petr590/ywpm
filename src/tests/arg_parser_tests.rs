@@ -87,7 +87,8 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
                     align_x: AlignX::Center,
                     align_y: AlignY::Top,
                 }),
-            }
+            },
+            period: CliTimePeriod { since: None, until: None, duration: None }
         })
     );
 

@@ -39,24 +39,24 @@ fn perform_initial_action_or_exit(state: &mut State) -> Option<String> {
     match perform_initial_action(state) {
         Ok(socket) => return socket,
 
-        Err(ref err) if let Some(err) = err.downcast_ref::<clap::Error>() => {
-            match err.kind() {
-                ErrorKind::DisplayHelp |
-                ErrorKind::DisplayVersion => {
-                    println!("{}", err.render());
-                    exit(0);
-                }
+        Err(ref err) => {
+            if let Some(err) = err.downcast_ref::<clap::Error>() {
+                match err.kind() {
+                    ErrorKind::DisplayHelp |
+                    ErrorKind::DisplayVersion => {
+                        println!("{}", err.render());
+                        exit(0);
+                    }
 
-                _ => {
-                    eprintln!("{}", err.render());
-                    exit(1);
+                    _ => {
+                        eprintln!("{}", err.render());
+                        exit(1);
+                    }
                 }
+            } else {
+                eprintln!("{}", err.to_string());
+                exit(1);
             }
-        }
-
-        Err(err) => {
-            eprintln!("{}", err.to_string());
-            exit(1);
         }
     }
 }

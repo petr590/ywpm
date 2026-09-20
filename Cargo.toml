@@ -1,13 +1,17 @@
 [package]
 name = "ywpm"
+version = "1.2.5"
 description = "YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers."
 authors = ["Petr <petrwinch-code@mail.ru>"]
-version = "1.2.4"
+repository = "https://github.com/petr590/ywpm"
+license = "GPL-3.0-or-later"
 edition = "2024"
 
 [package.metadata.deb]
 maintainer = "Petr <petrwinch-code@mail.ru>"
+license-file = ["LICENSE.txt", 0]
 extended-description = """\
+YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers.
 YoRHa Wallpaper Manager is a modern, user-friendly command-line tool that helps \
 you manage all your wallpapers on Linux. Please note that YWpM only determines \
 when and which wallpapers to render, it doesn’t render the wallpapers itself. \
@@ -30,15 +34,25 @@ YoRHa Wallpaper Manager — это современный, удобный кон
 поддерживается только mpvpaper.\
 """
 
+[package.metadata.generate-rpm]
+summary = """\
+YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers.
+YoRHa Wallpaper Manager is a modern, user-friendly command-line tool that helps \
+you manage all your wallpapers on Linux. Please note that YWpM only determines \
+when and which wallpapers to render, it doesn’t render the wallpapers itself. \
+Instead, YWpM uses a backend. Currently, only mpvpaper is supported as a backend.\
+"""
+assets = [
+    { source = "target/release/ywpmd",  dest = "/usr/libexec/ywpmd",                  mode = "0755" },
+    { source = "target/release/ywpm",   dest = "/usr/bin/ywpm",                       mode = "0755" },
+    { source = "systemd/ywpmd-pre.sh",  dest = "/usr/libexec/ywpmd-pre.sh",           mode = "0755" },
+    { source = "systemd/ywpmd.service", dest = "/usr/lib/systemd/user/ywpmd.service", mode = "0644" },
+    { source = "LICENSE.txt",           dest = "/usr/share/doc/ywpm/LICENSE",         mode = "0644" },
+]
+
+
 [dependencies]
 chrono = { version = "0.4", features = ["unstable-locales"] }
-clap = {
-    version = "4.6",
-    default-features = false,
-    # Disable color feature - it doesn't work
-    features = ["std", "help", "usage", "suggestions", "error-context", "derive"]
-}
-
 const-str       = "1.1"
 display-info    = "0.5"
 ffprobe         = "0.4"
@@ -50,21 +64,28 @@ nix             = { version = "0.31", features = ["poll", "signal"] }
 once_cell       = "1.21"
 path-absolutize = "4.0"
 phf             = { version = "0.14", features = ["macros"] }
-rand            = {
-    version = "0.10.2",
-    default-features = false,
-    features = ["thread_rng"]
-}
-regex           = {
-    version = "1.13",
-    default-features = false,
-    features = ["std", "perf"]
-}
 sd-notify       = "0.5"
 serde           = { version = "1.0", features = ["rc"] }
 serde_with      = { version = "3.23", features = ["chrono"] }
 walkdir         = "2.5"
 yaml_serde      = { version = "0.10", default-features = false }
+
+[dependencies.clap]
+version = "4.6"
+default-features = false
+# Disable color feature - it doesn't work
+features = ["std", "help", "usage", "suggestions", "error-context", "derive"]
+
+[dependencies.rand]
+version = "0.10"
+default-features = false
+features = ["thread_rng"]
+
+[dependencies.regex]
+version = "1.13"
+default-features = false
+features = ["std", "perf"]
+
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
