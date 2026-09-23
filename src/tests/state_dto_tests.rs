@@ -4,8 +4,8 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 
 use chrono::{Days, Local};
 
-use crate::daemon::state::{
-    DisplayMode, FitMode, SharedWallpaperNode, State, TimePeriod, Wallpaper, WallpaperGroup,
+use crate::state::{
+    Alignment, DisplayMode, FitMode, SharedWallpaperNode, State, TimePeriod, Wallpaper, WallpaperGroup,
 };
 
 #[test]
@@ -16,7 +16,7 @@ fn state_serializes() {
     add_wallpaper(
         &mut state,
         "/a/b/c/",
-        DisplayMode::new().fit_mode(FitMode::Stretch),
+        DisplayMode::new_with_fields(FitMode::Stretch, Alignment::Center),
         1,
         Some(TimePeriod::new(
             Local::now().naive_local(),
@@ -112,17 +112,11 @@ fn state_returns_all_wallpapers() {
 
     assert_eq!(wallpapers.len(), 4);
 
-    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/a.png", mode.clone())));
-    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/b.jpg", mode.clone())));
-    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/c.webp", mode.clone())));
-    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/a_ref.png", mode.clone())));
+    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/a.png",               mode.clone())));
+    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/b.jpg",               mode.clone())));
+    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/c.webp",              mode.clone())));
+    assert!(wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/a_ref.png",           mode.clone())));
 
-    assert!(!wallpapers.contains(&Wallpaper::new(
-        "/tmp/ywpm-test/unaccessible.jpeg",
-        mode.clone()
-    )));
-    assert!(!wallpapers.contains(&Wallpaper::new(
-        "/tmp/ywpm-test/broken_symlink.png",
-        mode.clone()
-    )));
+    assert!(!wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/unaccessible.jpeg",  mode.clone())));
+    assert!(!wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/broken_symlink.png", mode.clone())));
 }

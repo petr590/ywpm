@@ -1,0 +1,1 @@
+COMPLETE=fish ywpm | source

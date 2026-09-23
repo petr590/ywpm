@@ -1,16 +1,14 @@
 use std::collections::HashSet;
+use std::fs;
+use std::path::Path;
 
 use clap::Subcommand;
 use indoc::indoc;
+use path_absolutize::Absolutize;
 
-use crate::daemon::action::{ActionPerformError, ActionResult, ActionSuccess};
-use crate::daemon::arg_parsing::action_subcommand::ActionSubcommand::*;
-use crate::daemon::arg_parsing::{ArgParseError, Settings};
-use crate::daemon::arg_parsing::time_period::CliTimePeriod;
-use crate::daemon::service;
-use crate::daemon::state::State;
-use crate::{str_localized, util};
-
+use crate::cli::action_subcommand::ActionSubcommand::*;
+use crate::cli::{ArgParseError, ParsedTimePeriod, Settings};
+use crate::{arg_parse_error_localized, str_localized, util};
 
 macro_rules! GROUP_NAME {
     () => {
@@ -20,7 +18,6 @@ macro_rules! GROUP_NAME {
         )
     }
 }
-
 
 #[derive(Debug, PartialEq, Subcommand)]
 pub enum ActionSubcommand {
@@ -52,7 +49,7 @@ pub enum ActionSubcommand {
         settings: Settings,
 
         #[command(flatten)]
-        period: CliTimePeriod,
+        period: ParsedTimePeriod,
     },
 
 
@@ -118,7 +115,7 @@ pub enum ActionSubcommand {
         settings: Settings,
 
         #[command(flatten)]
-        period: CliTimePeriod,
+        period: ParsedTimePeriod,
     },
 
 
@@ -194,7 +191,7 @@ pub enum ActionSubcommand {
         name: String,
 
         #[command(flatten)] settings: Settings,
-        #[command(flatten)] period: CliTimePeriod,
+        #[command(flatten)] period: ParsedTimePeriod,
     },
 
 
@@ -285,10 +282,10 @@ pub enum ActionSubcommand {
 
 impl ActionSubcommand {
 
-    pub fn canonicalize_paths(&mut self, cwd: &str) -> Result<(), ArgParseError> {
+    pub(super) fn canonicalize_paths(&mut self, cwd: &str) -> Result<(), ArgParseError> {
         match self {
             SetWallpaper { path, .. } => {
-                *path = util::canonicalize_path_and_check_is_file(cwd, path)?;
+                *path = canonicalize_path_and_check_is_file(cwd, path)?;
             }
 
             AddNodes                 { paths, .. } |
@@ -297,7 +294,7 @@ impl ActionSubcommand {
             FindNonFittingWallpapers { paths, .. } => {
 
                 let path_set = paths.iter()
-                    .map(|path| util::canonicalize_path_and_check_is_file(cwd, path))
+                    .map(|path| canonicalize_path_and_check_is_file(cwd, path))
                     .collect::<Result<HashSet<String>, ArgParseError>>()?;
 
                 *paths = path_set.into_iter().collect();
@@ -318,68 +315,21 @@ impl ActionSubcommand {
 
         Ok(())
     }
+}
 
+fn canonicalize_path_and_check_is_file(cwd: &str, path: &str) -> Result<String, ArgParseError> {
+    let abs_path = Path::new(path).absolutize_from(cwd);
 
-    pub(super) fn perform_and_update_config(self, state: &mut State, is_verbose: bool) -> ActionResult {
-        let needs_update = self.needs_config_update();
+    let metadata = fs::metadata(abs_path.as_ref())
+            .map_err(|err| ArgParseError::new(err.to_string()))?;
 
-        self.perform(state, is_verbose).and_then(|msg| {
-            if needs_update {
-                service::config::write(state, util::get_config_path())
-                    .map_err(ActionPerformError::from_boxed)?;
-            }
-
-            Ok(msg)
-        })
-    }
-
-    fn perform(self, state: &mut State, is_verbose: bool) -> ActionResult {
-        match self {
-            GetCurrentWallpaper                     => return service::wallpaper::get_current(state, is_verbose),
-            SetWallpaper { path, settings, period } => return service::wallpaper::set(state, path, &settings, period.as_parsed_time_period()?),
-            SetRandowWallpaper                      => return service::wallpaper::set_random(state),
-            ResetWallpaper                          => service::wallpaper::reset(state),
-            RestoreWallpaper                        => service::wallpaper::restore(state)?,
-
-            GetNodeList                          => return Ok(service::node::get_list(state).into()),
-            AddNodes { paths, settings, period } => service::node::add(state, &paths, &settings, period.as_parsed_time_period()?)?,
-            RemoveNodes { paths }                => service::node::remove(state, &paths),
-            ClearNodes                           => service::node::clear(state),
-
-            GetGroupList                               => return Ok(service::group::get_list(state).into()),
-            GetGroup        { name }                   => return service::group::get_info(state, &name),
-            NewGroup        { name, paths }            => service::group::new(state, name, &paths)?,
-            SetGroup        { name, settings, period } => return service::group::set(state, &name, &settings, period.as_parsed_time_period()?),
-            AddToGroup      { name, paths }            => service::group::add_to_group(state, name, &paths)?,
-            RemoveFromGroup { name, paths }            => service::group::remove_from_group(state, &name, &paths)?,
-            ClearGroup      { name }                   => service::group::clear(state, &name)?,
-            RemoveGroup     { name }                   => service::group::remove(state, &name),
-
-            FindNonFittingWallpapers { paths, display_id } => {
-                return service::media::find_non_fitting(state, paths, display_id, is_verbose);
-            },
-        }
-
-        Ok(ActionSuccess::new())
-    }
-
-    fn needs_config_update(&self) -> bool {
-        match self {
-            SetWallpaper             { .. } |
-            SetRandowWallpaper       { .. } |
-            ResetWallpaper           { .. } |
-            AddNodes                 { .. } |
-            RemoveNodes              { .. } |
-            ClearNodes               { .. } |
-            NewGroup                 { .. } |
-            SetGroup                 { .. } |
-            AddToGroup               { .. } |
-            RemoveFromGroup          { .. } |
-            ClearGroup               { .. } |
-            RemoveGroup              { .. } |
-            FindNonFittingWallpapers { .. } => true,
-
-            _ => false,
-        }
+    if metadata.is_file() {
+        Ok(abs_path.to_string_lossy().into_owned())
+    } else {
+        Err(arg_parse_error_localized!(
+            "No such file: '{}'",
+            "Нет такого файла: '{}'",
+            abs_path.to_string_lossy()
+        ))
     }
 }

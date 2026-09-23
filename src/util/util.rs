@@ -1,11 +1,8 @@
-use std::{env, fs};
+use std::env;
 use std::path::Path;
 
 use once_cell::sync::Lazy;
 use path_absolutize::Absolutize;
-
-use crate::arg_parse_error_localized;
-use crate::daemon::arg_parsing::ArgParseError;
 
 pub static IS_RU: Lazy<bool> = Lazy::new(|| {
     env::var("LANG")
@@ -71,23 +68,6 @@ pub fn canonicalize_path(cwd: &str, path: &str) -> String {
         .absolutize_from(cwd)
         .to_string_lossy()
         .into_owned()
-}
-
-pub fn canonicalize_path_and_check_is_file(cwd: &str, path: &str) -> Result<String, ArgParseError> {
-    let abs_path = Path::new(path).absolutize_from(cwd);
-
-    let metadata = fs::metadata(abs_path.as_ref())
-            .map_err(|err| ArgParseError::new(err.to_string()))?;
-
-    if metadata.is_file() {
-        Ok(abs_path.to_string_lossy().into_owned())
-    } else {
-        Err(arg_parse_error_localized!(
-            "No such file: '{}'",
-            "Нет такого файла: '{}'",
-            abs_path.to_string_lossy()
-        ))
-    }
 }
 
 #[macro_export]

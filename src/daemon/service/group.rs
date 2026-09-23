@@ -2,10 +2,10 @@ use std::collections::HashSet;
 
 use itertools::Itertools;
 
-use crate::daemon::action::{ActionPerformError, ActionResult, ActionSuccess};
-use crate::daemon::arg_parsing::{ParsedTimePeriod, Settings};
-use crate::daemon::state::{SharedWallpaperNode, State, TimePeriod, WallpaperGroup};
 use crate::{action_perform_error_localized, format_localized};
+use crate::cli::{ParsedTimePeriod, Settings};
+use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
+use crate::state::{SharedWallpaperNode, State, TimePeriod, WallpaperGroup};
 
 pub fn get_list(state: &State) -> String {
     if state.groups.is_empty() {

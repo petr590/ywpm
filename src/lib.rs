@@ -1,9 +1,9 @@
+pub mod core;
+pub mod cli;
 pub mod daemon;
-pub mod reader;
+pub mod state;
 pub mod util;
-pub mod writer;
 
 pub mod tests;
 
 pub(crate) mod client;
-pub(crate) mod read_error;

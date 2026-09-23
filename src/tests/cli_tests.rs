@@ -1,6 +1,6 @@
 use clap::CommandFactory;
 
-use crate::daemon::arg_parsing::Cli;
+use crate::cli::Cli;
 
 #[test]
 fn verify_cli() {

@@ -3,7 +3,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::arg_parse_error_localized;
-use crate::daemon::arg_parsing::error::ArgParseError;
+use crate::cli::error::ArgParseError;
 
 fn parse_time(input: &str) -> Result<NaiveDateTime, ArgParseError> {
     let input = input.trim().to_lowercase();

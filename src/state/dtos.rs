@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::daemon::state::{SharedWallpaperNode, TimePeriod};
+use crate::state::{SharedWallpaperNode, TimePeriod};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WallpaperGroupDto {

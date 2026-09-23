@@ -1,18 +1,39 @@
-use std::env;
+use std::path::Path;
+use std::{env, io};
 use std::error::Error;
-use std::io::{BufReader, BufWriter, ErrorKind};
+use std::io::{BufRead, BufReader, BufWriter, ErrorKind};
 use std::os::unix::net::UnixStream;
 use std::process::exit;
 
-use clap::{Arg, Command};
-use ywpm::format_localized;
-use ywpm::reader;
-use ywpm::util;
-use ywpm::writer;
+use clap::{CommandFactory, Parser};
+use clap_complete::CompleteEnv;
+use ywpm::cli::{ActionSubcommand, Cli};
+use ywpm::{format_localized, str_localized};
+use ywpm::util::{self, ReadError};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut stream = match UnixStream::connect(get_socket_path()) {
-        Ok(stream) => stream,
+
+    CompleteEnv::with_factory(Cli::command).complete();
+
+    let cli = Cli::parse();
+
+    let socket_path = cli.socket_path()
+            .clone()
+            .unwrap_or_else(util::get_socket_path);
+
+
+    let mut stream = connect_to_socket(socket_path)?;
+
+    confirm_removing_and_clearing(cli.subcommand());
+
+    write_args(&mut stream)?;
+    read_response(&mut stream)?;
+    Ok(())
+}
+
+fn connect_to_socket(socket_path: impl AsRef<Path>) -> Result<UnixStream, io::Error> {
+    match UnixStream::connect(socket_path) {
+        Ok(stream) => Ok(stream),
 
         Err(err) if err.kind() == ErrorKind::NotFound => {
             eprintln!("{}", format_localized!(
@@ -23,18 +44,72 @@ fn main() -> Result<(), Box<dyn Error>> {
             exit(1);
         }
 
-        Err(err) => {
-            return Err(Box::new(err));
-        }
-    };
-
-    {
-        let mut buf_writer = BufWriter::new(&mut stream);
-        writer::write_string(&mut buf_writer, env::current_dir()?.to_str().unwrap_or_default())?;
-        writer::write_string_vec(&mut buf_writer, &std::env::args().collect())?;
+        Err(err) => Err(err),
     }
+}
 
-    let action_result = reader::read_response(&mut BufReader::new(&mut stream))?;
+fn confirm_removing_and_clearing(subcommand: &ActionSubcommand) {
+
+    match subcommand {
+        ActionSubcommand::RemoveNodes     { .. } |
+        ActionSubcommand::RemoveFromGroup { .. } => confirm(
+            "Do you really want to remove wallpapers from database?",
+            "Вы действительно хотите удалить обои из базы данных?"
+        ),
+
+        ActionSubcommand::RemoveGroup { .. } => confirm(
+            "Do you really want to remove group from database?",
+            "Вы действительно хотите удалить группу из базы данных?"
+        ),
+
+        ActionSubcommand::ClearNodes { .. } => confirm(
+            "Do you really want to remove all data from database?",
+            "Вы действительно хотите удалить все данные из базы данных?"
+        ),
+
+        ActionSubcommand::ClearGroup { .. } => confirm(
+            "Do you really want to remove all group's data?",
+            "Вы действительно хотите удалить все данные группы?"
+        ),
+
+        _ => {}
+    }
+}
+
+fn confirm(en_msg: &str, ru_msg: &str) {
+    let message = str_localized!(en_msg, ru_msg);
+    print!("{} [Y/n]: ", message);
+
+    for result in io::stdin().lock().lines() {
+
+        if let Ok(line) = result {
+            match line.trim().to_lowercase().as_str() {
+                "y" | "yes" => {
+                    break;
+                }
+
+                "n" | "no"  => {
+                    println!("{}", str_localized!("Aborted", "Прервано"));
+                    exit(0);
+                }
+
+                _ => {}
+            }
+        }
+
+        print!("{} [Y/n]: ", message);
+    }
+}
+
+fn write_args(stream: &mut UnixStream) -> io::Result<()> {
+    let mut writer = BufWriter::new(stream);
+    util::write_string(&mut writer, env::current_dir()?.to_str().unwrap_or_default())?;
+    util::write_string_vec(&mut writer, &env::args().collect())?;
+    Ok(())
+}
+
+fn read_response(stream: &mut UnixStream) -> Result<(), ReadError> {
+    let action_result = util::read_response(&mut BufReader::new(stream))?;
 
     match action_result {
         Ok(success) => {
@@ -47,23 +122,4 @@ fn main() -> Result<(), Box<dyn Error>> {
             exit(1);
         }
     }
-}
-
-fn get_socket_path() -> String {
-    let matches = Command::new("ywpm")
-        .ignore_errors(true) 
-        .arg(
-            Arg::new("socket")
-                .long("socket")
-                .num_args(1)
-                .required(false),
-        )
-        .try_get_matches_from(env::args())
-        .unwrap_or_else(|_| {
-            Command::new("ywpm").get_matches()
-        });
-    
-    matches.get_one::<String>("socket")
-        .cloned()
-        .unwrap_or_else(util::get_socket_path)
 }

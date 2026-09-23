@@ -1,7 +1,7 @@
 use chrono::{Days, Duration, Local, NaiveDate, Timelike};
 
+use crate::cli::{ArgParseError, parse_duration, parse_time_to_minutes};
 use crate::assert_is_err;
-use crate::daemon::arg_parsing::{ArgParseError, parse_duration, parse_time_to_minutes};
 
 #[test]
 fn check_time_parses_normally() -> Result<(), ArgParseError> {

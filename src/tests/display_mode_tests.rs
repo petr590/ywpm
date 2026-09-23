@@ -2,11 +2,11 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::daemon::state::{AlignX, AlignY, DisplayMode, DisplayModeParseError, FitMode};
+use crate::state::{Alignment, DisplayMode, DisplayModeParseError, FitMode};
 
 #[derive(Serialize, Deserialize)]
 struct DisplayModeProxy {
-    #[serde(with = "crate::daemon::state::display_mode_format")]
+    #[serde(with = "crate::state::display_mode_format")]
     mode: DisplayMode,
 }
 
@@ -21,36 +21,24 @@ fn display_mode_serializes() -> Result<(), yaml_serde::Error> {
     Ok(())
 }
 
-const CONTAIN_LEFT_TOP: DisplayMode =
-    DisplayMode::new_with_fields(FitMode::Contain, AlignX::Left, AlignY::Top);
-const CONTAIN_RIGHT_CENTER: DisplayMode =
-    DisplayMode::new_with_fields(FitMode::Contain, AlignX::Right, AlignY::Center);
-const CONTAIN_CENTER_TOP: DisplayMode =
-    DisplayMode::new_with_fields(FitMode::Contain, AlignX::Center, AlignY::Top);
-const STRETCH_CENTER: DisplayMode = DisplayMode::new().fit_mode(FitMode::Stretch);
+const CONTAIN_TOP:    DisplayMode = DisplayMode::new_with_fields(FitMode::Contain, Alignment::Top);
+const CONTAIN_RIGHT:  DisplayMode = DisplayMode::new_with_fields(FitMode::Contain, Alignment::Right);
+const CONTAIN_CENTER: DisplayMode = DisplayMode::new_with_fields(FitMode::Contain, Alignment::Center);
+const STRETCH_CENTER: DisplayMode = DisplayMode::new_with_fields(FitMode::Stretch, Alignment::Center);
 
 #[test]
 fn display_mode_to_string() {
-    assert_eq!(CONTAIN_LEFT_TOP.to_string(), "contain left top");
-    assert_eq!(CONTAIN_RIGHT_CENTER.to_string(), "contain right center");
-    assert_eq!(CONTAIN_CENTER_TOP.to_string(), "contain center top");
+    assert_eq!(CONTAIN_TOP.to_string(),    "contain top");
+    assert_eq!(CONTAIN_RIGHT.to_string(),  "contain right");
+    assert_eq!(CONTAIN_CENTER.to_string(), "contain center");
     assert_eq!(STRETCH_CENTER.to_string(), "stretch center");
 }
 
 #[test]
 fn display_mode_parses() -> Result<(), DisplayModeParseError> {
-    assert_eq!(DisplayMode::from_str("contain top left")?, CONTAIN_LEFT_TOP);
-    assert_eq!(
-        DisplayMode::from_str("contain right center")?,
-        CONTAIN_RIGHT_CENTER
-    );
-    assert_eq!(
-        DisplayMode::from_str("contain center top")?,
-        CONTAIN_CENTER_TOP
-    );
-    assert_eq!(
-        DisplayMode::from_str("top contain center ")?,
-        CONTAIN_CENTER_TOP
-    );
+    assert_eq!(DisplayMode::from_str("contain top")?,           CONTAIN_TOP);
+    assert_eq!(DisplayMode::from_str("contain right")?,         CONTAIN_RIGHT);
+    assert_eq!(DisplayMode::from_str("contain center")?,        CONTAIN_CENTER);
+    assert_eq!(DisplayMode::from_str("top contain   center ")?, CONTAIN_CENTER);
     Ok(())
 }

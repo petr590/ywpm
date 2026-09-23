@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serializer};
 
-use crate::daemon::state::DisplayMode;
+use crate::state::DisplayMode;
 
 pub(crate) fn serialize<S>(mode: &DisplayMode, serializer: S) -> Result<S::Ok, S::Error>
 where

@@ -2,9 +2,10 @@ use std::cell::RefMut;
 use std::str::FromStr;
 
 use clap::Args;
+use clap_complete::ArgValueCompleter;
 use indoc::indoc;
 
-use crate::daemon::state::{DisplayMode, WallpaperNode};
+use crate::state::{DisplayMode, DisplayModeCompleter, WallpaperNode};
 use crate::str_localized;
 
 /// Настройки для WallpaperNode. Каждое значение опционально, так как юзер может задать или не задать определённую настройку.
@@ -13,6 +14,7 @@ pub struct Settings {
     #[arg(
         short, long,
         value_parser = DisplayMode::from_str,
+        add = ArgValueCompleter::new(DisplayModeCompleter),
         help = str_localized!(
             indoc! {"
                 Wallpaper display mode. You can set vertical alignment
@@ -32,7 +34,7 @@ pub struct Settings {
                 - stretch - Не сохраняет пропорции, растягивая картинку
                 По умолчанию: 'center cover'
             "}
-        ) 
+        )
     )]
     pub mode: Option<DisplayMode>,
 

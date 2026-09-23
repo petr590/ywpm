@@ -36,6 +36,6 @@ impl ActionPerformError {
 #[macro_export]
 macro_rules! action_perform_error_localized {
     ($en_fmt:expr, $ru_fmt:expr $(, $arg:expr)* $(,)?) => {
-        crate::daemon::action::ActionPerformError::new(crate::format_localized!($en_fmt, $ru_fmt $(, $arg)*))
+        crate::core::ActionPerformError::new(crate::format_localized!($en_fmt, $ru_fmt $(, $arg)*))
     };
 }

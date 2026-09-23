@@ -1,10 +1,8 @@
 use clap::Parser;
 use indoc::indoc;
 
-use crate::daemon::action::ActionResult;
-use crate::daemon::arg_parsing::ArgParseError;
-use crate::daemon::arg_parsing::action_subcommand::ActionSubcommand;
-use crate::daemon::state::State;
+use crate::cli::ArgParseError;
+use crate::cli::action_subcommand::ActionSubcommand;
 use crate::str_localized;
 
 #[derive(Debug, Parser)]
@@ -55,36 +53,38 @@ pub struct Cli {
     verbose: bool,
 
     #[arg(
-        long, global = true,
+        long = "socket",
+        global = true,
         help = str_localized!(
             "Socket for connecting to the server",
             "Сокет для подключения к серверу"
         )
     )]
-    socket: Option<String>,
+    socket_path: Option<String>,
 
     #[command(subcommand)]
-    subcommand: Option<ActionSubcommand>,
+    subcommand: ActionSubcommand,
 }
 
 impl Cli {
 
-    pub fn subcommand(&self) -> &Option<ActionSubcommand> {
+    pub fn is_verbose(&self) -> bool {
+        self.verbose
+    }
+
+    pub fn subcommand(&self) -> &ActionSubcommand {
         &self.subcommand
     }
 
-    pub fn socket(&self) -> &Option<String> {
-        &self.socket
+    pub fn subcommand_move(self) -> ActionSubcommand {
+        self.subcommand
+    }
+
+    pub fn socket_path(&self) -> &Option<String> {
+        &self.socket_path
     }
 
     pub fn canonicalize_paths(&mut self, cwd: &str) -> Result<(), ArgParseError> {
-        self.subcommand.as_mut()
-            .unwrap()
-            .canonicalize_paths(cwd)
-    }
-    
-    pub fn perform_and_update_config(self, state: &mut State) -> ActionResult {
-        self.subcommand.unwrap()
-            .perform_and_update_config(state, self.verbose)
+        self.subcommand.canonicalize_paths(cwd)
     }
 }

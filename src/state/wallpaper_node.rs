@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::daemon::state::{DisplayMode, TimePeriod};
+use crate::state::{DisplayMode, TimePeriod};
 
 /// WallpaperNode - узел, который может представлять как файл, так и папку.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -14,7 +14,7 @@ pub struct WallpaperNode {
     #[serde(
         default = "DisplayMode::new",
         skip_serializing_if = "DisplayMode::is_default",
-        with = "crate::daemon::state::display_mode_format"
+        with = "crate::state::display_mode_format"
     )]
     pub mode: DisplayMode,
 

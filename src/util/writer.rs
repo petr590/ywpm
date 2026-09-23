@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use crate::daemon::action::ActionSuccess;
+use crate::core::ActionSuccess;
 
 pub fn write_string_vec(writer: &mut impl Write, vec: &Vec<String>) -> io::Result<()> {
     writer.write_all(&(vec.len() as u64).to_be_bytes())?;

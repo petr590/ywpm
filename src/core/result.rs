@@ -1,7 +1,7 @@
 use std::fmt;
 
-use crate::daemon::action::ActionPerformError;
-use crate::daemon::warning::Warning;
+use crate::core::ActionPerformError;
+use crate::core::Warning;
 
 pub type ActionResult = Result<ActionSuccess, ActionPerformError>;
 
@@ -39,13 +39,6 @@ impl ActionSuccess {
         Self {
             message: message.into(),
             warning: Warning::new(),
-        }
-    }
-
-    pub fn with_warning(warning: impl Into<Warning>) -> Self {
-        Self {
-            message: String::new(),
-            warning: warning.into(),
         }
     }
 }

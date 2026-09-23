@@ -1,11 +1,9 @@
-use clap::{CommandFactory, Parser};
-use clap::error::ErrorKind;
+use clap::Parser;
 use nix::errno::Errno;
 use nix::poll::{self, PollFd, PollFlags};
 use nix::sys::signal::{SigSet, Signal};
 use nix::sys::signalfd::{SfdFlags, SignalFd};
 use sd_notify::NotifyState;
-use ywpm::daemon::arg_parsing::Cli;
 use std::env;
 use std::error::Error;
 use std::io::{self, BufReader, BufWriter};
@@ -14,11 +12,12 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::process::exit;
 
-use ywpm::daemon::action::ActionPerformError;
-use ywpm::daemon::backend;
+use ywpm::cli::Cli;
+use ywpm::core::ActionPerformError;
+use ywpm::daemon::{backend, service};
 use ywpm::daemon::service::{config, wallpaper};
-use ywpm::daemon::state::State;
-use ywpm::{reader, util, writer};
+use ywpm::state::State;
+use ywpm::util;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut state = config::read_or_create_empty(util::get_config_path())?;
@@ -37,45 +36,26 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn perform_initial_action_or_exit(state: &mut State) -> Option<String> {
 
     match perform_initial_action(state) {
-        Ok(socket) => return socket,
+        Ok(socket) => socket,
 
-        Err(ref err) => {
-            if let Some(err) = err.downcast_ref::<clap::Error>() {
-                match err.kind() {
-                    ErrorKind::DisplayHelp |
-                    ErrorKind::DisplayVersion => {
-                        println!("{}", err.render());
-                        exit(0);
-                    }
-
-                    _ => {
-                        eprintln!("{}", err.render());
-                        exit(1);
-                    }
-                }
-            } else {
-                eprintln!("{}", err.to_string());
-                exit(1);
-            }
+        Err(err) => {
+            eprintln!("{}", err.to_string());
+            exit(1);
         }
     }
 }
 
 fn perform_initial_action(state: &mut State) -> Result<Option<String>, Box<dyn Error>> {
-    let mut cli = Cli::try_parse()?;
+    let mut cli = Cli::parse();
 
-    let socket = cli.socket().clone();
+    cli.canonicalize_paths(
+        env::current_dir()?
+            .to_str().unwrap_or_default()
+    )?;
 
-    if cli.subcommand().is_some() {
-        cli.canonicalize_paths(
-            env::current_dir()?
-                .to_str().unwrap_or_default()
-        )?;
-
-        cli.perform_and_update_config(state)?;
-    }
-
-    Ok(socket)
+    let socket_path = cli.socket_path().clone();
+    service::perform_action_and_update_config(cli, state)?;
+    Ok(socket_path)
 }
 
 
@@ -162,31 +142,27 @@ fn get_signal_fd() -> Result<SignalFd, Errno> {
 }
 
 fn handle_client(mut stream: UnixStream, state: &mut State) -> Result<(), Box<dyn Error>> {
-    let mut buf_reader = BufReader::new(&mut stream);
+    let mut reader = BufReader::new(&mut stream);
 
-    let cwd = reader::read_string(&mut buf_reader)?;
-    let args = reader::read_string_vec(&mut buf_reader)?;
+    let cwd = util::read_string(&mut reader)?;
+    let args = util::read_string_vec(&mut reader)?;
 
     let mut writer = BufWriter::new(&mut stream);
 
     match Cli::try_parse_from(&args) {
-        Ok(cli) if cli.subcommand().is_none() => {
-            writer::write_error(&mut writer, &Cli::command().render_long_help().to_string())?;
-        }
-
         Ok(mut cli) => {
             let result = cli.canonicalize_paths(&cwd)
                 .map_err(|err| ActionPerformError::new(err.message()))
-                .and_then(|()| cli.perform_and_update_config(state));
+                .and_then(|()| service::perform_action_and_update_config(cli, state));
 
             match result {
-                Ok(success) => writer::write_ok(&mut writer, success)?,
-                Err(error) => writer::write_error(&mut writer, error.message())?,
+                Ok(success) => util::write_ok(&mut writer, success)?,
+                Err(error) => util::write_error(&mut writer, error.message())?,
             }
         },
 
         Err(error) => {
-            writer::write_error(&mut writer, &error.render().to_string())?;
+            util::write_error(&mut writer, &error.render().to_string())?;
         },
     }
 

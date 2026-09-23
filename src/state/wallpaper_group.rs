@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::daemon::state::dtos::WallpaperGroupDto;
-use crate::daemon::state::{SharedWallpaperNode, TimePeriod};
+use crate::state::dtos::WallpaperGroupDto;
+use crate::state::{SharedWallpaperNode, TimePeriod};
 
 #[derive(Debug, Clone)]
 pub struct WallpaperGroup {

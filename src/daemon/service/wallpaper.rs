@@ -1,8 +1,8 @@
 use crate::{action_perform_error_localized, format_localized};
-use crate::daemon::action::{ActionPerformError, ActionResult, ActionSuccess};
-use crate::daemon::arg_parsing::{ParsedTimePeriod, Settings};
+use crate::cli::{ParsedTimePeriod, Settings};
+use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
 use crate::daemon::backend;
-use crate::daemon::state::{SharedWallpaperNode, State, TimePeriod};
+use crate::state::{SharedWallpaperNode, State, TimePeriod};
 
 pub fn restore(state: &mut State) -> Result<(), ActionPerformError> {
     if backend::is_running() {

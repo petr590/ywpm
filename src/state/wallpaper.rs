@@ -1,4 +1,4 @@
-use crate::daemon::state::{DisplayMode, WallpaperNode};
+use crate::state::{DisplayMode, WallpaperNode};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Wallpaper {

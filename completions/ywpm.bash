@@ -1,0 +1,1 @@
+source <(COMPLETE=bash ywpm)

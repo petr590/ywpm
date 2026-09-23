@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use crate::daemon::state::State;
+use crate::state::State;
 
 pub fn read_or_create_empty(path: impl AsRef<Path>) -> Result<State, Box<dyn Error>> {
     if let Some(dir) = path.as_ref().parent() {

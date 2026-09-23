@@ -12,14 +12,14 @@ use rand::random_range;
 use walkdir::WalkDir;
 
 use crate::action_perform_error_localized;
-use crate::daemon::action::ActionPerformError;
-use crate::daemon::arg_parsing::{ParsedTimePeriod, Settings};
+use crate::cli::{ParsedTimePeriod, Settings};
+use crate::core::ActionPerformError;
 use crate::daemon::backend;
-use crate::daemon::state::dtos::StateDto;
-use crate::daemon::state::{
+use crate::core::Warning;
+use crate::state::dtos::StateDto;
+use crate::state::{
     DisplayMode, SharedWallpaperNode, TimePeriod, Wallpaper, WallpaperGroup, WallpaperNode,
 };
-use crate::daemon::warning::Warning;
 
 #[derive(Debug, Clone)]
 pub struct State {

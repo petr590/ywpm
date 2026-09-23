@@ -5,7 +5,7 @@ use std::process::{Child, Command};
 
 use indoc::formatdoc;
 
-use crate::daemon::state::{AlignX, AlignY, FitMode, Wallpaper};
+use crate::state::{Alignment, FitMode, Wallpaper};
 
 thread_local! {
     static CHILD: RefCell<Option<Child>> = RefCell::new(None);
@@ -27,21 +27,17 @@ pub(crate) fn run(wallpaper: &Wallpaper) -> Result<(), Box<dyn Error>> {
         println!("Mode: '{mode}'");
 
         let mode_opt = match mode.fit_mode {
-            FitMode::Cover => "panscan=1",
+            FitMode::Cover   => "panscan=1",
             FitMode::Contain => "panscan=0",
             FitMode::Stretch => "video-aspect=0",
         };
 
-        let align_x = match mode.align_x {
-            AlignX::Left => "-1",
-            AlignX::Center => "0",
-            AlignX::Right => "1",
-        };
-
-        let align_y = match mode.align_y {
-            AlignY::Top => "-1",
-            AlignY::Center => "0",
-            AlignY::Bottom => "1",
+        let (align_x, align_y) = match mode.alignment {
+            Alignment::Center => ( "0",  "0"),
+            Alignment::Top    => ( "0", "-1"),
+            Alignment::Bottom => ( "0",  "1"),
+            Alignment::Left   => ("-1",  "0"),
+            Alignment::Right  => ( "1",  "0"),
         };
 
         let child = Command::new("mpvpaper")

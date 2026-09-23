@@ -1,6 +1,6 @@
 [package]
 name = "ywpm"
-version = "1.2.5"
+version = "1.2.6"
 description = "YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers."
 authors = ["Petr <petrwinch-code@mail.ru>"]
 repository = "https://github.com/petr590/ywpm"
@@ -9,7 +9,7 @@ edition = "2024"
 
 [package.metadata.deb]
 maintainer = "Petr <petrwinch-code@mail.ru>"
-license-file = ["LICENSE.txt", 0]
+license-file = "LICENSE.txt"
 extended-description = """\
 YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers.
 YoRHa Wallpaper Manager is a modern, user-friendly command-line tool that helps \
@@ -22,6 +22,11 @@ assets = [
     ["target/release/ywpm",   "usr/bin/ywpm",                       "755"],
     ["systemd/ywpmd-pre.sh",  "usr/libexec/ywpmd-pre.sh",           "755"],
     ["systemd/ywpmd.service", "usr/lib/systemd/user/ywpmd.service", "644"],
+    
+    ["completions/ywpm.bash", "usr/share/bash-completion/completions/ywpm",    "644"],
+    ["completions/_ywpm",     "usr/share/zsh/vendor-completions/_ywpm",        "644"],
+    ["completions/ywpm.fish", "usr/share/fish/vendor-completions.d/ywpm.fish", "644"],
+    ["completions/ywpm.elv",  "usr/share/elvish/lib/ywpm.elv",                 "644"],
 ]
 
 [package.metadata.deb.variants.ru]
@@ -48,11 +53,18 @@ assets = [
     { source = "systemd/ywpmd-pre.sh",  dest = "/usr/libexec/ywpmd-pre.sh",           mode = "0755" },
     { source = "systemd/ywpmd.service", dest = "/usr/lib/systemd/user/ywpmd.service", mode = "0644" },
     { source = "LICENSE.txt",           dest = "/usr/share/doc/ywpm/LICENSE",         mode = "0644" },
+    
+    { source = "completions/ywpm.bash", dest = "usr/share/bash-completion/completions/ywpm",    mode = "0644" },
+    { source = "completions/_ywpm",     dest = "usr/share/zsh/vendor-completions/_ywpm",        mode = "0644" },
+    { source = "completions/ywpm.fish", dest = "usr/share/fish/vendor-completions.d/ywpm.fish", mode = "0644" },
+    { source = "completions/ywpm.elv",  dest = "usr/share/elvish/lib/ywpm.elv",                 mode = "0644" },
 ]
 
 
 [dependencies]
-chrono = { version = "0.4", features = ["unstable-locales"] }
+chrono          = { version = "0.4", features = ["unstable-locales"] }
+clap            = { version = "4.6", features = ["derive"] }
+clap_complete   = { version = "4.6", features = ["unstable-dynamic"] }
 const-str       = "1.1"
 display-info    = "0.5"
 ffprobe         = "0.4"
@@ -67,14 +79,9 @@ phf             = { version = "0.14", features = ["macros"] }
 sd-notify       = "0.5"
 serde           = { version = "1.0", features = ["rc"] }
 serde_with      = { version = "3.23", features = ["chrono"] }
+shlex           = "2.0"
 walkdir         = "2.5"
 yaml_serde      = { version = "0.10", default-features = false }
-
-[dependencies.clap]
-version = "4.6"
-default-features = false
-# Disable color feature - it doesn't work
-features = ["std", "help", "usage", "suggestions", "error-context", "derive"]
 
 [dependencies.rand]
 version = "0.10"
@@ -85,6 +92,17 @@ features = ["thread_rng"]
 version = "1.13"
 default-features = false
 features = ["std", "perf"]
+
+
+# [build-dependencies]
+# chrono          = { version = "0.4", features = ["unstable-locales"] }
+# clap_complete = "4.6"
+# once_cell       = "1.21"
+
+# [build-dependencies.regex]
+# version = "1.13"
+# default-features = false
+# features = ["std", "perf"]
 
 
 [dev-dependencies]

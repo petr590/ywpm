@@ -1,9 +1,9 @@
 use itertools::Itertools;
 
-use crate::daemon::action::ActionPerformError;
-use crate::daemon::arg_parsing::{ParsedTimePeriod, Settings};
+use crate::cli::{ParsedTimePeriod, Settings};
+use crate::core::ActionPerformError;
 use crate::daemon::backend;
-use crate::daemon::state::{State, Wallpaper};
+use crate::state::{State, Wallpaper};
 
 pub fn get_list(state: &State) -> String {
     if state.nodes.is_empty() {

@@ -8,10 +8,10 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 
 use crate::action_perform_error_localized;
-use crate::daemon::action::{ActionPerformError, ActionResult, ActionSuccess};
+use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
 use crate::daemon::service::resolution::Resolution;
-use crate::daemon::state::{DisplayMode, SharedWallpaperNode, State, Wallpaper};
-use crate::daemon::warning::Warning;
+use crate::core::Warning;
+use crate::state::{DisplayMode, SharedWallpaperNode, State, Wallpaper};
 
 
 pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Option<u32>, is_verbose: bool) -> ActionResult {

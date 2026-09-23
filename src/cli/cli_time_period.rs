@@ -1,12 +1,19 @@
 use chrono::{Duration, Local, NaiveDateTime, Timelike};
 use clap::Args;
+use clap::error::ErrorKind;
 use indoc::indoc;
 
-use crate::action_perform_error_localized;
-use crate::daemon::action::ActionPerformError;
-use crate::daemon::arg_parsing::{ParsedTimePeriod, time_parser};
-use crate::daemon::state::TimePeriod;
+use crate::cli::{ParsedTimePeriod, time_parser};
+use crate::state::TimePeriod;
 use crate::str_localized;
+
+
+macro_rules! clap_error_localized_str {
+    ($kind:expr, $en_msg:expr, $ru_msg:expr) => {
+        clap::Error::raw($kind, str_localized!($en_msg, $ru_msg))
+    };
+}
+
 
 #[derive(Debug, PartialEq, Args)]
 pub struct CliTimePeriod {
@@ -57,7 +64,7 @@ impl CliTimePeriod {
         self.duration.is_none()
     }
 
-    pub(crate) fn as_parsed_time_period(&self) -> Result<ParsedTimePeriod, ActionPerformError> {
+    pub(crate) fn as_parsed_time_period(&self) -> Result<ParsedTimePeriod, clap::Error> {
         if self.is_none() {
             return Ok(ParsedTimePeriod::NotSpecified);
         }
@@ -67,7 +74,8 @@ impl CliTimePeriod {
             .with_nanosecond(0).unwrap();
 
         if self.until.is_some() && self.duration.is_some() {
-            return Err(action_perform_error_localized!(
+            return Err(clap_error_localized_str!(
+                ErrorKind::ArgumentConflict,
                 "The '--until' and '--duration' options cannot be set simultaneously",
                 "Параметры '--until' и '--duration' не могут быть заданы одновременно"
             ));
@@ -77,7 +85,8 @@ impl CliTimePeriod {
 
         let until = self.until
             .or_else(|| self.duration.map(|dur| since + dur))
-            .ok_or_else(|| action_perform_error_localized!(
+            .ok_or_else(|| clap_error_localized_str!(
+                ErrorKind::MissingRequiredArgument,
                 "If the '--since' option is set, then one of '--until' or '--duration' options must also be set",
                 "Если указана опция '--since', то также должна быть указана одна из опций '--until' или '--duration'"
             ))?;
@@ -91,16 +100,18 @@ impl CliTimePeriod {
         })
     }
 
-    fn check_time_bounds(&self, now: NaiveDateTime) -> Result<(), ActionPerformError> {
+    fn check_time_bounds(&self, now: NaiveDateTime) -> Result<(), clap::Error> {
         if self.since.is_some_and(|since| since < now) {
-            return Err(action_perform_error_localized!(
+            return Err(clap_error_localized_str!(
+                ErrorKind::InvalidValue,
                 "The '--since' time is earlier then now",
                 "Время '--since' раньше текущего момента"
             ));
         }
 
         if self.until.is_some_and(|until| until < now) {
-            return Err(action_perform_error_localized!(
+            return Err(clap_error_localized_str!(
+                ErrorKind::InvalidValue,
                 "The '--until' time is earlier then now",
                 "Время '--until' раньше текущего момента"
             ));
@@ -110,7 +121,8 @@ impl CliTimePeriod {
             let Some(until) = self.until &&
             until < since
         {
-            return Err(action_perform_error_localized!(
+            return Err(clap_error_localized_str!(
+                ErrorKind::InvalidValue,
                 "The '--until' time is earlier to '--since'",
                 "Время '--until' раньше времени '--since'"
             ));

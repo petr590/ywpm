@@ -1,8 +1,8 @@
 use std::io::Read;
 
-use crate::daemon::action::{ActionPerformError, ActionResult, ActionSuccess};
-use crate::daemon::warning::Warning;
-use crate::read_error::ReadError;
+use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
+use crate::core::Warning;
+use crate::util::read_error::ReadError;
 
 pub fn read_string_vec(reader: &mut impl Read) -> Result<Vec<String>, ReadError> {
     let size = read_size(reader)?;
