@@ -1,6 +1,7 @@
 mod display_mode;
 mod display_mode_completer;
 mod dtos;
+mod shared_wallpaper_node;
 mod state;
 mod time_period;
 mod wallpaper;
@@ -11,10 +12,11 @@ pub use state::State;
 
 pub(crate) use display_mode::{Alignment, DisplayMode, FitMode};
 pub(crate) use display_mode_completer::DisplayModeCompleter;
+pub(crate) use shared_wallpaper_node::SharedWallpaperNode;
 pub(crate) use time_period::TimePeriod;
 pub(crate) use wallpaper::Wallpaper;
 pub(crate) use wallpaper_group::WallpaperGroup;
-pub(crate) use wallpaper_node::{SharedWallpaperNode, WallpaperNode};
+pub(crate) use wallpaper_node::WallpaperNode;
 
 #[cfg(not(test))]
 mod display_mode_format;

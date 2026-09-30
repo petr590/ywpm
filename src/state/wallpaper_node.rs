@@ -1,7 +1,3 @@
-use std::cell::{Ref, RefCell, RefMut};
-use std::hash::{Hash, Hasher};
-use std::rc::Rc;
-
 use serde::{Deserialize, Serialize};
 
 use crate::state::{DisplayMode, TimePeriod};
@@ -9,7 +5,7 @@ use crate::state::{DisplayMode, TimePeriod};
 /// WallpaperNode - узел, который может представлять как файл, так и папку.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WallpaperNode {
-    pub path: String,
+    path: String,
 
     #[serde(
         default = "DisplayMode::new",
@@ -46,57 +42,7 @@ impl WallpaperNode {
         }
     }
 
-    pub fn path(&self) -> &String {
+    pub fn path(&self) -> &str {
         &self.path
-    }
-
-    pub fn with_path(&self, path: impl Into<String>) -> Self {
-        Self {
-            path: path.into(),
-            mode: self.mode.clone(),
-            recursive_level: self.recursive_level,
-            period: self.period.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
-pub struct SharedWallpaperNode(Rc<RefCell<WallpaperNode>>);
-
-impl PartialEq for SharedWallpaperNode {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::as_ptr(&self.0) == Rc::as_ptr(&other.0)
-    }
-}
-
-impl Hash for SharedWallpaperNode {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        Rc::as_ptr(&self.0).hash(state);
-    }
-}
-
-impl AsRef<SharedWallpaperNode> for SharedWallpaperNode {
-    fn as_ref(&self) -> &SharedWallpaperNode {
-        self
-    }
-}
-
-impl SharedWallpaperNode {
-    pub fn new(path: impl Into<String>, mode: DisplayMode, recursive_level: u16, period: Option<TimePeriod>) -> Self {
-        Self::from(WallpaperNode::new(path, mode, recursive_level, period))
-    }
-
-    pub fn borrow(&self) -> Ref<'_, WallpaperNode> {
-        self.0.borrow()
-    }
-
-    pub fn borrow_mut(&self) -> RefMut<'_, WallpaperNode> {
-        self.0.borrow_mut()
-    }
-}
-
-impl From<WallpaperNode> for SharedWallpaperNode {
-    fn from(node: WallpaperNode) -> Self {
-        Self(Rc::new(RefCell::new(node)))
     }
 }

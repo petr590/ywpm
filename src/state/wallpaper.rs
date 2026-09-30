@@ -9,7 +9,7 @@ pub struct Wallpaper {
 impl From<&WallpaperNode> for Wallpaper {
     fn from(node: &WallpaperNode) -> Self {
         Self {
-            path: node.path.clone(),
+            path: String::from(node.path()),
             mode: node.mode.clone(),
         }
     }

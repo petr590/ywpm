@@ -64,4 +64,11 @@ impl TimePeriod {
         period.as_ref()
             .is_none_or(|period| period.is_datetime_in_bounds(&Local::now().naive_local()))
     }
+
+    pub(crate) fn opt_to_string(period: &Option<TimePeriod>) -> String {
+        match period {
+            Some(period) => period.to_string(),
+            None => String::from("none"),
+        }
+    }
 }

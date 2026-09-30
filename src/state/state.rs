@@ -42,7 +42,7 @@ impl State {
     pub fn from_dto(dto: StateDto) -> Self {
         let nodes = dto.nodes.into_iter()
             .map(|node| {
-                let path = node.borrow().path().clone();
+                let path = String::from(node.borrow().path());
                 (path, node)
             }).collect();
 
@@ -58,13 +58,18 @@ impl State {
     }
 
     pub fn as_dto(&self) -> StateDto {
+        let mut nodes = self.nodes.iter()
+                .map(|(_path, node)| node.clone())
+                .collect::<Vec<SharedWallpaperNode>>();
+        
+        nodes.sort_by(|node1, node2| {
+            node1.borrow().path()
+                .cmp(node2.borrow().path())
+        });
+
         StateDto {
             current_wallpaper_path: self.current_wallpaper_path.clone(),
-
-            nodes: self.nodes.iter()
-                .map(|(_path, node)| node.clone())
-                .collect(),
-
+            nodes,
             groups: self.groups.iter()
                 .map(|(name, group)| (name.clone(), group.as_dto()))
                 .collect(),
@@ -234,7 +239,13 @@ impl State {
         }
     }
 
-    pub fn clear_expired_peroids(&mut self) {
+    pub fn normalize(&mut self) -> &mut Self {
+        self.clear_expired_peroids();
+        self.clear_redundant_paths();
+        self
+    }
+
+    fn clear_expired_peroids(&mut self) {
         let now = Local::now().naive_local();
 
         for node in self.nodes.values_mut() {
@@ -245,9 +256,61 @@ impl State {
             clear_period_if_expired(&mut group.period, &now);
         }
     }
+
+    fn clear_redundant_paths(&mut self) {
+        if self.nodes.len() < 2 {
+            return;
+        }
+
+        let mut paths = self.nodes.keys()
+                .map(|p| p.as_str())
+                .collect::<Vec<&str>>();
+        
+        paths.sort();
+
+        let mut redudant: Vec<String> = Vec::new();
+        let mut base_path = paths[0];
+
+        for &path in &paths[1..] {
+            if self.is_redudant(path, base_path) {
+                redudant.push(String::from(path));
+            } else {
+                base_path = path;
+            }
+        }
+
+        for path in redudant {
+            self.nodes.remove(&path);
+        }
+    }
+
+    fn is_redudant(&self, child_path: &str, parent_path: &str) -> bool {
+        if !path_starts_with(child_path, parent_path) {
+            return false;
+        }
+
+        let child  = self.nodes.get(child_path).unwrap().borrow();
+        let parent = self.nodes.get(parent_path).unwrap().borrow();
+
+        child.mode == parent.mode && (
+            child.period == parent.period ||
+            child.period.is_none()
+        ) && (
+            parent.recursive_level > child.recursive_level ||
+            parent.recursive_level > 0 && Path::new(child_path).is_file()
+        )
+    }
 }
 
 // ---------------------------------------- Util functions ----------------------------------------
+
+fn path_starts_with(path: &str, prefix: &str) -> bool {
+    path.starts_with(prefix) && (
+        prefix.ends_with('/') ||
+        path.len() == prefix.len() || 
+        path.as_bytes()[prefix.len()] == b'/'
+    )
+}
 
 fn clear_period_if_expired(period: &mut Option<TimePeriod>, now: &NaiveDateTime) {
     if period.as_ref().is_some_and(|period| period.is_expired(now)) {

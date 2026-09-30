@@ -5,7 +5,9 @@ YoRHa Wallpaper Manager is a modern, user‑friendly console tool that helps you
 
 ### 1. Dependencies
 * cargo
-* mpvpaper ### 2. Compiling and building the package
+* mpvpaper
+
+### 2. Compiling and building the package
 #### 2.1. Building a DEB package:
 ``` bash
 cargo install cargo-deb
@@ -17,6 +19,8 @@ sudo apt-get install ./target/debian/*.deb
 ``` bash
 cargo install cargo-generate-rpm
 cargo generate-rpm
+```
+
 Installation for **Fedora / RHEL / CentOS**:
 ``` bash
 sudo dnf install ./target/generate-rpm/*.rpm
@@ -80,7 +84,7 @@ Wallpaper display mode. You can set vertical alignment (top/center/bottom), hori
 
 **Examples:**
 
-* `ywpm add /path -m 'cover right'` - The image will be shifted to the right and cropped if it is wider than the screen
+* `ywpm add /path -m cover,right` - The image will be shifted to the right and cropped if it is wider than the screen
 * `ywpm add /path -m 'top contain'` - The image will be shifted upward without cropping if it is wider than the screen
 
 ### -r, --recursive-level

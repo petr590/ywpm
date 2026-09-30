@@ -32,10 +32,6 @@ impl Warning {
         let _ = write!(self.message, "{message}");
     }
 
-    pub fn append_ln(&mut self, message: &str) {
-        let _ = writeln!(self.message, "{message}");
-    }
-
     pub fn append_msg_error_path(&mut self, message: &str, err: &dyn Error, path: &str) {
         let _ = writeln!(self.message, "Warning: {message}: {err}: '{path}'");
     }

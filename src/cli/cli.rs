@@ -1,14 +1,14 @@
-use clap::Parser;
+use clap::{ArgAction, Parser, ValueHint};
 use indoc::indoc;
 
 use crate::cli::ArgParseError;
 use crate::cli::action_subcommand::ActionSubcommand;
-use crate::str_localized;
+use crate::localized;
 
 #[derive(Debug, Parser)]
 #[command(
     name = "ywpm",
-    about = str_localized!(
+    about = localized!(
         "Desktop wallpaper management utility",
         "Утилита управления обоями рабочего стола"
     ),
@@ -17,7 +17,7 @@ use crate::str_localized;
     term_width = 80,
     disable_help_flag = true,
 
-    help_template = str_localized!(
+    help_template = localized!(
         indoc! {"
             {about-with-newline}
             Usage: {usage}
@@ -35,8 +35,8 @@ use crate::str_localized;
 pub struct Cli {
     #[arg(
         short, long, global = true,
-        action = clap::ArgAction::Help,
-        help = str_localized!(
+        action = ArgAction::Help,
+        help = localized!(
             "Show this help",
             "Показать эту справку"
         )
@@ -44,8 +44,18 @@ pub struct Cli {
     help: Option<bool>,
 
     #[arg(
+        short = 'y',
+        global = true,
+        help = localized!(
+            "Do not ask for confirmation before removing wallpapers/groups from config",
+            "Не спрашивать подтверждение перед удалением обоев/групп из конфига"
+        )
+    )]
+    skip_confirmation: bool,
+
+    #[arg(
         short, long, global = true,
-        help = str_localized!(
+        help = localized!(
             "Verbose output (for 'get' and 'find-non-fitting')",
             "Подробный вывод (для get и find-non-fitting)"
         )
@@ -55,7 +65,8 @@ pub struct Cli {
     #[arg(
         long = "socket",
         global = true,
-        help = str_localized!(
+        value_hint = ValueHint::FilePath,
+        help = localized!(
             "Socket for connecting to the server",
             "Сокет для подключения к серверу"
         )
@@ -67,6 +78,10 @@ pub struct Cli {
 }
 
 impl Cli {
+
+    pub fn skip_confirmation(&self) -> bool {
+        self.skip_confirmation
+    }
 
     pub fn is_verbose(&self) -> bool {
         self.verbose

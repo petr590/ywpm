@@ -54,7 +54,7 @@ impl ValueCompleter for DisplayModeCompleter {
             }
 
             None => {
-                NAMES.iter()
+                NAMES.into_iter()
                     .map(CompletionCandidate::new)
                     .collect()
             }

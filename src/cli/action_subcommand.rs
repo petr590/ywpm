@@ -2,17 +2,17 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
-use clap::Subcommand;
+use clap::{Subcommand, ValueHint};
 use indoc::indoc;
 use path_absolutize::Absolutize;
 
 use crate::cli::action_subcommand::ActionSubcommand::*;
 use crate::cli::{ArgParseError, ParsedTimePeriod, Settings};
-use crate::{arg_parse_error_localized, str_localized, util};
+use crate::{arg_parse_error_localized, localized, util};
 
 macro_rules! GROUP_NAME {
     () => {
-        str_localized!(
+        localized!(
             "Group name",
             "Имя группы"
         )
@@ -23,7 +23,7 @@ macro_rules! GROUP_NAME {
 pub enum ActionSubcommand {
     #[command(
         name = "get",
-        about = str_localized!(
+        about = localized!(
             "Get path to current wallpaper",
             "Получить путь к текущим обоям"
         )
@@ -33,16 +33,19 @@ pub enum ActionSubcommand {
 
     #[command(
         name = "set",
-        about = str_localized!(
+        about = localized!(
             "Set specified wallpaper. If folder is specified, random wallpapers from folder are set",
             "Установить указанные обои. Если указана папка, то устанавливаются случайные обои из папки"
         )
     )]
     SetWallpaper {
-        #[arg(help = str_localized!(
-            "Path to the file/folder",
-            "Путь к файлу/папке"
-        ))]
+        #[arg(
+            value_hint = ValueHint::AnyPath,
+            help = localized!(
+                "Path to the file/folder",
+                "Путь к файлу/папке"
+            )
+        )]
         path: String,
 
         #[command(flatten)]
@@ -55,7 +58,7 @@ pub enum ActionSubcommand {
 
     #[command(
         name = "random",
-        about = str_localized!(
+        about = localized!(
             "Set random wallpapers from all in list",
             "Установить случайные обои из всех в списке"
         )
@@ -65,7 +68,7 @@ pub enum ActionSubcommand {
 
     #[command(
         name = "reset",
-        about = str_localized!(
+        about = localized!(
             "Reset installed wallpaper",
             "Сбросить установленные обои"
         )
@@ -75,7 +78,7 @@ pub enum ActionSubcommand {
 
     #[command(
         name = "restore",
-        about = str_localized!(
+        about = localized!(
             "Restore previous wallpaper (usually, systemd service automatically passes this parameter to daemon at startup)",
             "Восстановить предыдущие обои (как правило, сервис systemd автоматически передаёт этот параметр демону при запуске)"
         )
@@ -85,7 +88,7 @@ pub enum ActionSubcommand {
 
     #[command(
         name = "list",
-        about = str_localized!(
+        about = localized!(
             "Get list of all wallpaper paths",
             "Получить список всех путей к обоям"
         )
@@ -95,7 +98,7 @@ pub enum ActionSubcommand {
 
     #[command(
         name = "add",
-        about = str_localized!(
+        about = localized!(
             "Add a folder/file to list",
             "Добавить папку/файл в список"
         )
@@ -104,7 +107,8 @@ pub enum ActionSubcommand {
         #[arg(
             required = true,
             num_args = 1..,
-            help = str_localized!(
+            value_hint = ValueHint::AnyPath,
+            help = localized!(
                 "Mandatory list of paths",
                 "Обязательный список путей"
             )
@@ -121,7 +125,7 @@ pub enum ActionSubcommand {
 
     #[command(
         name = "remove",
-        about = str_localized!(
+        about = localized!(
             "Remove a folder/file from list (not from disk)",
             "Удалить папку/файл из списка (не с диска)"
         )
@@ -130,7 +134,8 @@ pub enum ActionSubcommand {
         #[arg(
             required = true,
             num_args = 1..,
-            help = str_localized!(
+            value_hint = ValueHint::AnyPath,
+            help = localized!(
                 "Mandatory list of paths",
                 "Обязательный список путей"
             )
@@ -141,7 +146,7 @@ pub enum ActionSubcommand {
 
     #[command(
         name = "clear",
-        about = str_localized!(
+        about = localized!(
             "Clear all data",
             "Очистить все данные"
         )
@@ -151,7 +156,7 @@ pub enum ActionSubcommand {
 
     #[command(
         name = "group-list",
-        about = str_localized!(
+        about = localized!(
             "Show list of all groups",
             "Показать список всех групп"
         )
@@ -159,7 +164,7 @@ pub enum ActionSubcommand {
     GetGroupList,
 
 
-    #[command(about = str_localized!(
+    #[command(about = localized!(
         "Show information and group's composition",
         "Показать информацию и состав группы"
     ))]
@@ -169,7 +174,7 @@ pub enum ActionSubcommand {
     },
 
 
-    #[command(about = str_localized!(
+    #[command(about = localized!(
         "Create new group",
         "Создать новую группу"
     ))]
@@ -177,12 +182,15 @@ pub enum ActionSubcommand {
         #[arg(help = GROUP_NAME!())]
         name: String,
 
-        #[arg(num_args = 0..)]
+        #[arg(
+            num_args = 0..,
+            value_hint = ValueHint::AnyPath,
+        )]
         paths: Vec<String>,
     },
 
 
-    #[command(about = str_localized!(
+    #[command(about = localized!(
         "Set random wallpapers from group",
         "Установить рандомные обои из группы"
     ))]
@@ -195,7 +203,7 @@ pub enum ActionSubcommand {
     },
 
 
-    #[command(about = str_localized!(
+    #[command(about = localized!(
         "Add files/folders to group",
         "Добавить файлы/папки в группу"
     ))]
@@ -203,12 +211,16 @@ pub enum ActionSubcommand {
         #[arg(help = GROUP_NAME!())]
         name: String,
 
-        #[arg(required = true, num_args = 1..)]
+        #[arg(
+            required = true,
+            num_args = 1..,
+            value_hint = ValueHint::AnyPath,
+        )]
         paths: Vec<String>,
     },
 
 
-    #[command(about = str_localized!(
+    #[command(about = localized!(
         "Remove files/folders from group (not from disk)",
         "Удалить файлы/папки из группы (не с диска)"
     ))]
@@ -216,12 +228,16 @@ pub enum ActionSubcommand {
         #[arg(help = GROUP_NAME!())]
         name: String,
 
-        #[arg(required = true, num_args = 1..)]
+        #[arg(
+            required = true,
+            num_args = 1..,
+            value_hint = ValueHint::AnyPath,
+        )]
         paths: Vec<String>,
     },
 
 
-    #[command(about = str_localized!(
+    #[command(about = localized!(
         "Clear group",
         "Очистить группу"
     ))]
@@ -231,12 +247,12 @@ pub enum ActionSubcommand {
     },
 
 
-    #[command(about = str_localized!(
+    #[command(about = localized!(
         "Remove group",
         "Удалить группу"
     ))]
     RemoveGroup {
-        #[arg(help = str_localized!(
+        #[arg(help = localized!(
             "Group name",
             "Имя группы"
         ))]
@@ -246,7 +262,7 @@ pub enum ActionSubcommand {
 
     #[command(
         name = "find-non-fitting",
-        about = str_localized!(
+        about = localized!(
             indoc! {"
                 Find all images and videos whose aspect ratio differs from monitor and for which --mode is
                 not specified. For videos, it also checks for pixel-by-pixel resolution matching, as real-time
@@ -262,7 +278,8 @@ pub enum ActionSubcommand {
     FindNonFittingWallpapers {
         #[arg(
             num_args = 0..,
-            help = str_localized!(
+            value_hint = ValueHint::AnyPath,
+            help = localized!(
                 "A list of paths for searching. If not specified, list of paths from DB is used",
                 "Список путей для поиска. Если не задано, используется список путей из БД"
             )
@@ -271,7 +288,7 @@ pub enum ActionSubcommand {
 
         #[arg(
             long,
-            help = str_localized!(
+            help = localized!(
                 "Display ID if there is more than one display on the computer",
                 "ID дисплея в случае, если на компьютере более одного дисплея"
             )
@@ -285,7 +302,7 @@ impl ActionSubcommand {
     pub(super) fn canonicalize_paths(&mut self, cwd: &str) -> Result<(), ArgParseError> {
         match self {
             SetWallpaper { path, .. } => {
-                *path = canonicalize_path_and_check_is_file(cwd, path)?;
+                *path = canonicalize_path_and_check_exists(cwd, path)?;
             }
 
             AddNodes                 { paths, .. } |
@@ -294,7 +311,7 @@ impl ActionSubcommand {
             FindNonFittingWallpapers { paths, .. } => {
 
                 let path_set = paths.iter()
-                    .map(|path| canonicalize_path_and_check_is_file(cwd, path))
+                    .map(|path| canonicalize_path_and_check_exists(cwd, path))
                     .collect::<Result<HashSet<String>, ArgParseError>>()?;
 
                 *paths = path_set.into_iter().collect();
@@ -315,20 +332,40 @@ impl ActionSubcommand {
 
         Ok(())
     }
+
+    pub fn changes_state(&self) -> bool {
+        match self {
+            SetWallpaper             { .. } |
+            SetRandowWallpaper       { .. } |
+            ResetWallpaper           { .. } |
+            AddNodes                 { .. } |
+            RemoveNodes              { .. } |
+            ClearNodes               { .. } |
+            NewGroup                 { .. } |
+            SetGroup                 { .. } |
+            AddToGroup               { .. } |
+            RemoveFromGroup          { .. } |
+            ClearGroup               { .. } |
+            RemoveGroup              { .. } |
+            FindNonFittingWallpapers { .. } => true,
+
+            _ => false,
+        }
+    }
 }
 
-fn canonicalize_path_and_check_is_file(cwd: &str, path: &str) -> Result<String, ArgParseError> {
+fn canonicalize_path_and_check_exists(cwd: &str, path: &str) -> Result<String, ArgParseError> {
     let abs_path = Path::new(path).absolutize_from(cwd);
 
     let metadata = fs::metadata(abs_path.as_ref())
             .map_err(|err| ArgParseError::new(err.to_string()))?;
 
-    if metadata.is_file() {
+    if metadata.is_file() || metadata.is_dir() {
         Ok(abs_path.to_string_lossy().into_owned())
     } else {
         Err(arg_parse_error_localized!(
-            "No such file: '{}'",
-            "Нет такого файла: '{}'",
+            "No such file or directory: '{}'",
+            "Нет такого файла или каталога: '{}'",
             abs_path.to_string_lossy()
         ))
     }

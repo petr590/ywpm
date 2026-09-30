@@ -27,16 +27,8 @@ impl Resolution {
     pub fn ratio_str(&self) -> String {
         let gcd = gcd(self.width, self.height);
 
-        let w = if gcd > 1 {
-            self.width / gcd
-        } else {
-            self.width
-        };
-        let h = if gcd > 1 {
-            self.height / gcd
-        } else {
-            self.height
-        };
+        let w = if gcd > 1 { self.width  / gcd } else { self.width };
+        let h = if gcd > 1 { self.height / gcd } else { self.height };
 
         format!("{w}:{h}")
     }

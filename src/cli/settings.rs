@@ -6,7 +6,7 @@ use clap_complete::ArgValueCompleter;
 use indoc::indoc;
 
 use crate::state::{DisplayMode, DisplayModeCompleter, WallpaperNode};
-use crate::str_localized;
+use crate::localized;
 
 /// Настройки для WallpaperNode. Каждое значение опционально, так как юзер может задать или не задать определённую настройку.
 #[derive(Debug, PartialEq, Clone, Args)]
@@ -15,7 +15,7 @@ pub struct Settings {
         short, long,
         value_parser = DisplayMode::from_str,
         add = ArgValueCompleter::new(DisplayModeCompleter),
-        help = str_localized!(
+        help = localized!(
             indoc! {"
                 Wallpaper display mode. You can set vertical alignment
                 (top/center/bottom), horizontal alignment (left/center/right),
@@ -40,7 +40,7 @@ pub struct Settings {
 
     #[arg(
         short, long,
-        help = str_localized!(
+        help = localized!(
             "The recursive search level for files in a folder. Range: 1..65535. Default: 1",
             "Уровень рекурсивного поиска файлов в папке. Диапазон: 1..65535. По умолчанию: 1"
         )

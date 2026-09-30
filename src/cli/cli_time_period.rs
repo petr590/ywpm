@@ -5,12 +5,12 @@ use indoc::indoc;
 
 use crate::cli::{ParsedTimePeriod, time_parser};
 use crate::state::TimePeriod;
-use crate::str_localized;
+use crate::localized;
 
 
-macro_rules! clap_error_localized_str {
+macro_rules! clap_error_localized {
     ($kind:expr, $en_msg:expr, $ru_msg:expr) => {
-        clap::Error::raw($kind, str_localized!($en_msg, $ru_msg))
+        clap::Error::raw($kind, localized!($en_msg, $ru_msg))
     };
 }
 
@@ -20,7 +20,7 @@ pub struct CliTimePeriod {
     #[arg(
         short, long,
         value_parser = time_parser::parse_time_to_minutes,
-        help = str_localized!(
+        help = localized!(
             "Period start (default: now). Format: \"14:00\", \"2026-06-11 12:00\"",
             "Начало периода (по умолчанию: now). Формат: \"14:00\", \"2026-06-11 12:00\""
         )
@@ -31,7 +31,7 @@ pub struct CliTimePeriod {
         short, long,
         value_parser = time_parser::parse_time_to_minutes,
         conflicts_with = "duration",
-        help = str_localized!(
+        help = localized!(
             "Period end. Format: date/time, now, tomorrow",
             "Конец периода. Формат: дата/время, now, tomorrow"
         )
@@ -42,7 +42,7 @@ pub struct CliTimePeriod {
         short, long,
         value_parser = time_parser::parse_duration,
         conflicts_with = "until",
-        help = str_localized!(
+        help = localized!(
             indoc! {"
                 Period duration (e.g.: 30m, 40 minutes, 12h, 3d, 2w, 5 month, 1 year, 20:30).
                 Months and years are counted as 30 and 365 days, respectively
@@ -74,7 +74,7 @@ impl CliTimePeriod {
             .with_nanosecond(0).unwrap();
 
         if self.until.is_some() && self.duration.is_some() {
-            return Err(clap_error_localized_str!(
+            return Err(clap_error_localized!(
                 ErrorKind::ArgumentConflict,
                 "The '--until' and '--duration' options cannot be set simultaneously",
                 "Параметры '--until' и '--duration' не могут быть заданы одновременно"
@@ -85,7 +85,7 @@ impl CliTimePeriod {
 
         let until = self.until
             .or_else(|| self.duration.map(|dur| since + dur))
-            .ok_or_else(|| clap_error_localized_str!(
+            .ok_or_else(|| clap_error_localized!(
                 ErrorKind::MissingRequiredArgument,
                 "If the '--since' option is set, then one of '--until' or '--duration' options must also be set",
                 "Если указана опция '--since', то также должна быть указана одна из опций '--until' или '--duration'"
@@ -102,7 +102,7 @@ impl CliTimePeriod {
 
     fn check_time_bounds(&self, now: NaiveDateTime) -> Result<(), clap::Error> {
         if self.since.is_some_and(|since| since < now) {
-            return Err(clap_error_localized_str!(
+            return Err(clap_error_localized!(
                 ErrorKind::InvalidValue,
                 "The '--since' time is earlier then now",
                 "Время '--since' раньше текущего момента"
@@ -110,7 +110,7 @@ impl CliTimePeriod {
         }
 
         if self.until.is_some_and(|until| until < now) {
-            return Err(clap_error_localized_str!(
+            return Err(clap_error_localized!(
                 ErrorKind::InvalidValue,
                 "The '--until' time is earlier then now",
                 "Время '--until' раньше текущего момента"
@@ -121,7 +121,7 @@ impl CliTimePeriod {
             let Some(until) = self.until &&
             until < since
         {
-            return Err(clap_error_localized_str!(
+            return Err(clap_error_localized!(
                 ErrorKind::InvalidValue,
                 "The '--until' time is earlier to '--since'",
                 "Время '--until' раньше времени '--since'"

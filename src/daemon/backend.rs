@@ -23,8 +23,10 @@ pub(crate) fn run(wallpaper: &Wallpaper) -> Result<(), Box<dyn Error>> {
     CHILD.with_borrow_mut(|opt| -> Result<(), Box<dyn Error>> {
         let mode = wallpaper.mode();
 
-        println!("Wallpaper: '{}'", wallpaper.path());
-        println!("Mode: '{mode}'");
+        println!(
+            "Starting 'mpvpaper'. Mode: '{}', path: '{}'",
+            mode, wallpaper.path()
+        );
 
         let mode_opt = match mode.fit_mode {
             FitMode::Cover   => "panscan=1",
@@ -56,7 +58,7 @@ pub(crate) fn run(wallpaper: &Wallpaper) -> Result<(), Box<dyn Error>> {
 
         *opt = Some(child);
 
-        println!("Process 'mpvpaper' started");
+        println!("Started 'mpvpaper'");
 
         Ok(())
     })?;

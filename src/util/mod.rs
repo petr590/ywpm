@@ -1,9 +1,11 @@
-mod read_error;
+mod read_write_error;
 mod reader;
 mod writer;
 mod util;
 
-pub use read_error::ReadError;
-pub use reader::{read_response, read_string, read_string_vec};
-pub use writer::{write_error, write_ok, write_string, write_string_vec};
-pub use util::{IS_RU, canonicalize_path, get_config_path, get_socket_path};
+pub use read_write_error::ReadWriteError;
+pub use reader::*;
+pub use writer::*;
+pub use util::*;
+
+pub type ReadWriteResult<T> = Result<T, ReadWriteError>;

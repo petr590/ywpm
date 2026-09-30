@@ -1,15 +1,15 @@
 use std::path::Path;
 use std::{env, io};
 use std::error::Error;
-use std::io::{BufRead, BufReader, BufWriter, ErrorKind};
+use std::io::{BufRead, BufReader, BufWriter, ErrorKind, IsTerminal};
 use std::os::unix::net::UnixStream;
 use std::process::exit;
 
 use clap::{CommandFactory, Parser};
 use clap_complete::CompleteEnv;
 use ywpm::cli::{ActionSubcommand, Cli};
-use ywpm::{format_localized, str_localized};
-use ywpm::util::{self, ReadError};
+use ywpm::{format_localized, localized};
+use ywpm::util::{self, ReadWriteResult};
 
 fn main() -> Result<(), Box<dyn Error>> {
 
@@ -24,31 +24,38 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut stream = connect_to_socket(socket_path)?;
 
-    confirm_removing_and_clearing(cli.subcommand());
+    let confirmed = cli.skip_confirmation() ||
+            !io::stdin().is_terminal() ||
+            confirm_removing_and_clearing(cli.subcommand());
 
-    write_args(&mut stream)?;
-    read_response(&mut stream)?;
+    if confirmed {
+        write_args(&mut stream)?;
+        read_response(&mut stream)?;
+    } else {
+        util::write_bool(&mut stream, false)?;
+    }
+
     Ok(())
 }
 
 fn connect_to_socket(socket_path: impl AsRef<Path>) -> Result<UnixStream, io::Error> {
-    match UnixStream::connect(socket_path) {
-        Ok(stream) => Ok(stream),
+    let result = UnixStream::connect(socket_path);
 
-        Err(err) if err.kind() == ErrorKind::NotFound => {
-            eprintln!("{}", format_localized!(
-                "ywpmd is not running. Try: systemctl --user start ywpmd.service",
-                "ywpmd не запущен. Попробуйте: systemctl --user start ywpmd.service"
-            ));
+    if let Err(ref io_err) = result &&
+        io_err.kind() == ErrorKind::NotFound
+    {
+        eprintln!("{}", format_localized!(
+            "ywpmd is not running. Try: systemctl --user start ywpmd.service",
+            "ywpmd не запущен. Попробуйте: systemctl --user start ywpmd.service"
+        ));
 
-            exit(1);
-        }
-
-        Err(err) => Err(err),
+        exit(1);
     }
+
+    result
 }
 
-fn confirm_removing_and_clearing(subcommand: &ActionSubcommand) {
+fn confirm_removing_and_clearing(subcommand: &ActionSubcommand) -> bool {
 
     match subcommand {
         ActionSubcommand::RemoveNodes     { .. } |
@@ -72,43 +79,48 @@ fn confirm_removing_and_clearing(subcommand: &ActionSubcommand) {
             "Вы действительно хотите удалить все данные группы?"
         ),
 
-        _ => {}
+        _ => true,
     }
 }
 
-fn confirm(en_msg: &str, ru_msg: &str) {
-    let message = str_localized!(en_msg, ru_msg);
-    print!("{} [Y/n]: ", message);
+fn confirm(en_msg: &str, ru_msg: &str) -> bool {
+    let message = localized!(en_msg, ru_msg);
+
+    eprint!("{message} [Y/n]: ");
 
     for result in io::stdin().lock().lines() {
 
         if let Ok(line) = result {
             match line.trim().to_lowercase().as_str() {
-                "y" | "yes" => {
-                    break;
+                "y" | "yes" | "" => {
+                    return true;
                 }
 
-                "n" | "no"  => {
-                    println!("{}", str_localized!("Aborted", "Прервано"));
-                    exit(0);
+                "n" | "no" => {
+                    eprintln!("{}", localized!("Aborted", "Прервано"));
+                    return false;
                 }
 
                 _ => {}
             }
         }
 
-        print!("{} [Y/n]: ", message);
+        eprint!("{message} [Y/n]: ");
     }
+
+    false
 }
 
-fn write_args(stream: &mut UnixStream) -> io::Result<()> {
+fn write_args(stream: &mut UnixStream) -> Result<(), Box<dyn Error>> {
     let mut writer = BufWriter::new(stream);
+    util::write_bool(&mut writer, true)?;
     util::write_string(&mut writer, env::current_dir()?.to_str().unwrap_or_default())?;
     util::write_string_vec(&mut writer, &env::args().collect())?;
+    util::write_u16(&mut writer, util::get_terminal_width())?;
     Ok(())
 }
 
-fn read_response(stream: &mut UnixStream) -> Result<(), ReadError> {
+fn read_response(stream: &mut UnixStream) -> ReadWriteResult<()> {
     let action_result = util::read_response(&mut BufReader::new(stream))?;
 
     match action_result {

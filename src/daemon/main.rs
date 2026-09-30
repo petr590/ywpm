@@ -17,7 +17,7 @@ use ywpm::core::ActionPerformError;
 use ywpm::daemon::{backend, service};
 use ywpm::daemon::service::{config, wallpaper};
 use ywpm::state::State;
-use ywpm::util;
+use ywpm::util::{self, ReadWriteError};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut state = config::read_or_create_empty(util::get_config_path())?;
@@ -54,7 +54,7 @@ fn perform_initial_action(state: &mut State) -> Result<Option<String>, Box<dyn E
     )?;
 
     let socket_path = cli.socket_path().clone();
-    service::perform_action_and_update_config(cli, state)?;
+    service::perform_action_and_update_config(cli, state, util::get_terminal_width())?;
     Ok(socket_path)
 }
 
@@ -88,30 +88,15 @@ fn main_loop(mut state: State, socket_path: impl AsRef<Path>) -> Result<(), Box<
             }
 
             Ok(_) => {
-                if let Some(revents) = poll_fds[0].revents()
-                    && revents.contains(PollFlags::POLLIN)
-                {
-                    match listener.accept() {
-                        Ok((stream, _)) => handle_client(stream, &mut state)?,
-                        Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-                        Err(err) => eprintln!("Accept error: {err}"),
-                    }
+                let listener_poll_fd = &poll_fds[0];
+                let signal_poll_fd = &poll_fds[1];
+
+                if listener_poll_fd.revents().is_some_and(|revents| revents.contains(PollFlags::POLLIN)) {
+                    accept_client(&listener, &mut state);
                 }
 
-                if let Some(revents) = poll_fds[1].revents()
-                    && revents.contains(PollFlags::POLLIN)
-                {
-                    println!("\nReceived shutdown signal! Exiting gracefully...");
-
-                    let _ = std::fs::remove_file(socket_path);
-
-                    state.clear_expired_peroids();
-
-                    if let Err(err) = config::write(&state, util::get_config_path()) {
-                        eprintln!("Error while writing config: {}", err.to_string());
-                    }
-
-                    backend::stop();
+                if signal_poll_fd.revents().is_some_and(|revents| revents.contains(PollFlags::POLLIN)) {
+                    shutdown(socket_path, &mut state);
                     break;
                 }
             }
@@ -141,19 +126,42 @@ fn get_signal_fd() -> Result<SignalFd, Errno> {
     Ok(SignalFd::with_flags(&mask, SfdFlags::SFD_NONBLOCK)?)
 }
 
-fn handle_client(mut stream: UnixStream, state: &mut State) -> Result<(), Box<dyn Error>> {
+fn accept_client(listener: &UnixListener, state: &mut State) {
+    match listener.accept() {
+        Ok((stream, _)) => {
+            match handle_client(stream, state) {
+                Ok(()) => {}
+                Err(rw_err) => eprintln!("Client handle error: {rw_err}"),
+            }
+        }
+
+        Err(io_err) if io_err.kind() == io::ErrorKind::WouldBlock => {}
+        Err(io_err) => eprintln!("Accept I/O error: {io_err}"),
+    }
+}
+
+fn handle_client(mut stream: UnixStream, state: &mut State) -> Result<(), ReadWriteError> {
     let mut reader = BufReader::new(&mut stream);
+
+    if !util::read_bool(&mut reader)? {
+        return Ok(());
+    }
 
     let cwd = util::read_string(&mut reader)?;
     let args = util::read_string_vec(&mut reader)?;
+    let term_width = util::read_u16(&mut reader)?;
 
     let mut writer = BufWriter::new(&mut stream);
 
     match Cli::try_parse_from(&args) {
         Ok(mut cli) => {
+            if cli.subcommand().changes_state() {
+                println!("Command: {}", args.join(" "))
+            }
+
             let result = cli.canonicalize_paths(&cwd)
                 .map_err(|err| ActionPerformError::new(err.message()))
-                .and_then(|()| service::perform_action_and_update_config(cli, state));
+                .and_then(|()| service::perform_action_and_update_config(cli, state, term_width));
 
             match result {
                 Ok(success) => util::write_ok(&mut writer, success)?,
@@ -167,4 +175,16 @@ fn handle_client(mut stream: UnixStream, state: &mut State) -> Result<(), Box<dy
     }
 
     Ok(())
+}
+
+fn shutdown(socket_path: &Path, state: &mut State) {
+    println!("\nReceived shutdown signal! Exiting gracefully...");
+
+    let _ = std::fs::remove_file(socket_path);
+
+    if let Err(err) = config::write(state.normalize(), util::get_config_path()) {
+        eprintln!("Error while writing config: {}", err.to_string());
+    }
+
+    backend::stop();
 }

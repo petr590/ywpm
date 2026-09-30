@@ -1,73 +1,68 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use comfy_table::{ContentArrangement, Table, presets};
 use display_info::DisplayInfo;
 use ffprobe::FfProbeError;
 use imagesize::ImageError;
 use indexmap::IndexSet;
 use itertools::Itertools;
 
-use crate::action_perform_error_localized;
+use crate::{action_perform_error_localized, localized};
 use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
 use crate::daemon::service::resolution::Resolution;
 use crate::core::Warning;
 use crate::state::{DisplayMode, SharedWallpaperNode, State, Wallpaper};
 
 
-pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Option<u32>, is_verbose: bool) -> ActionResult {
-    let (wallpapers, mut total_warning) = if paths.is_empty() {
-        state.find_all_child_wallpapers(state.nodes.values())
-    } else {
-        let nodes = paths.iter()
-            .map(|path| state.get_or_insert_node(path))
-            .collect::<Vec<SharedWallpaperNode>>();
+pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Option<u32>, is_verbose: bool, term_width: u16) -> ActionResult {
+    let display_res = get_display_resolution(display_id)?;
 
-        state.find_all_child_wallpapers(nodes)
-    };
+    let (wallpapers, mut warning) = get_wallpapers(state, paths);
+    let (info_map, warning2)      = get_media_info(wallpapers);
 
-    find_non_fitting_of(wallpapers, display_id, is_verbose).map(|success| {
-        total_warning.append(success.warning.message());
-        ActionSuccess {
-            message: success.message,
-            warning: total_warning,
-        }
-    })
-}
+    warning.append(warning2.message());
 
-fn find_non_fitting_of(wallpapers: IndexSet<Wallpaper>, display_id: Option<u32>, is_verbose: bool) -> ActionResult {
 
-    let display_resol = get_display_resolution(display_id)?;
     let mut message = String::new();
 
     if is_verbose {
-        let _ = writeln!(message, "Display: {}, {}", display_resol, display_resol.ratio_str());
-    }
+        let mut table = Table::new();
 
-    let (info_map, warning) = get_media_info(wallpapers);
-
-    for (path, info) in info_map {
-        let resol = info.resolution;
-
-        if info.is_video {
-            if resol != display_resol {
-                if is_verbose {
-                    let _ = writeln!(message, "{}, {}, {}", resol, resol.ratio_str(), path);
-                } else {
-                    let _ = writeln!(message, "{path}");
-                }
+        table
+            .load_style(presets::UTF8_FULL)
+            .set_width(term_width)
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_header(localized!(
+                ["Resolution", "Ratio",       "Path"],
+                ["Разрешение", "Соотношение", "Путь"],
+            ));
+        
+        find_non_fitting_of(&display_res, info_map,
+            |path, info| {
+                table.add_row([
+                    info.resolution.to_string(),
+                    info.resolution.ratio_str(),
+                    path
+                ]);
             }
-        } else {
-            if info.mode.is_default() && resol.ratio_equals(&display_resol) {
-                if is_verbose {
-                    let _ = writeln!(message, "{}, {}, {}", resol, resol.ratio_str(), path);
-                } else {
-                    let _ = writeln!(message, "{path}");
-                }
-            }
-        }
-    }
+        );
 
-    Ok(ActionSuccess { message, warning })
+        let _ = writeln!(message, "{table}");
+        let _ = writeln!(message, "Display: {}, {}", display_res, display_res.ratio_str());
+
+    } else {
+        find_non_fitting_of(&display_res, info_map,
+            |path, _| {
+                let _ = writeln!(message, "{path}");
+            }
+        );
+    }
+    
+    Ok(ActionSuccess {
+        message,
+        warning,
+    })
 }
 
 
@@ -105,6 +100,18 @@ fn get_display_resolution(display_id: Option<u32>) -> Result<Resolution, ActionP
                 .map(|info| format!("#{} ({}x{})", info.id, info.width, info.height))
                 .join(", ")
         ))
+    }
+}
+
+fn get_wallpapers(state: &mut State, paths: Vec<String>) -> (IndexSet<Wallpaper>, Warning) {
+    if paths.is_empty() {
+        state.find_all_child_wallpapers(state.nodes.values())
+    } else {
+        let nodes = paths.iter()
+            .map(|path| state.get_or_insert_node(path))
+            .collect::<Vec<SharedWallpaperNode>>();
+
+        state.find_all_child_wallpapers(nodes)
     }
 }
 
@@ -194,7 +201,23 @@ where
 }
 
 fn is_codec_type_video(codec_type: &Option<String>) -> bool {
-    codec_type
-        .as_ref()
-        .is_some_and(|codec_type| codec_type == "video")
+    codec_type.as_ref().is_some_and(|codec_type| codec_type == "video")
+}
+
+fn find_non_fitting_of(display_res: &Resolution, info_map: HashMap<String, MediaInfo>, mut consumer: impl FnMut(String, MediaInfo)) {
+
+    for (path, info) in info_map {
+        if info.is_video {
+            if info.resolution != *display_res {
+                consumer(path, info)
+            }
+
+        } else {
+            if  info.mode.is_default() &&
+                !info.resolution.ratio_equals(display_res)
+            {
+                consumer(path, info)
+            }
+        };
+    }
 }

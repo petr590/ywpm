@@ -1,6 +1,7 @@
 use std::env;
 use std::path::Path;
 
+use crossterm::terminal;
 use once_cell::sync::Lazy;
 use path_absolutize::Absolutize;
 
@@ -63,16 +64,23 @@ pub use debug::{get_config_path, get_socket_path};
 pub use release::{get_config_path, get_socket_path};
 
 
-pub fn canonicalize_path(cwd: &str, path: &str) -> String {
+pub(crate) fn canonicalize_path(cwd: &str, path: &str) -> String {
     Path::new(path)
         .absolutize_from(cwd)
         .to_string_lossy()
         .into_owned()
 }
 
+pub fn get_terminal_width() -> u16 {
+    match terminal::size() {
+        Ok((width, _height)) => width,
+        Err(_) => 80,
+    }
+}
+
 #[macro_export]
-macro_rules! str_localized {
-    ($en_msg:expr, $ru_msg:expr) => {
+macro_rules! localized {
+    ($en_msg:expr, $ru_msg:expr $(,)?) => {
         if *crate::util::IS_RU {
             $ru_msg
         } else {

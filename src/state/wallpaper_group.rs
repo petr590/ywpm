@@ -19,9 +19,7 @@ impl WallpaperGroup {
 
     pub fn from_dto(dto: WallpaperGroupDto, wallpapers: &HashMap<String, SharedWallpaperNode>) -> Self {
         Self {
-            nodes: dto
-                .nodes
-                .iter()
+            nodes: dto.nodes.iter()
                 .map(|path| wallpapers.get(path).cloned())
                 .flatten()
                 .collect(),
@@ -46,9 +44,7 @@ impl WallpaperGroup {
 
     pub fn as_dto(&self) -> WallpaperGroupDto {
         WallpaperGroupDto {
-            nodes: self
-                .nodes
-                .iter()
+            nodes: self.nodes.iter()
                 .map(|node| node.borrow().path().to_string())
                 .collect(),
 

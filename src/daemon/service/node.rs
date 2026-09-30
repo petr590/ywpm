@@ -1,18 +1,66 @@
+use std::env;
+
+use comfy_table::{ColumnConstraint, ContentArrangement, Table, Width, presets};
 use itertools::Itertools;
 
 use crate::cli::{ParsedTimePeriod, Settings};
 use crate::core::ActionPerformError;
 use crate::daemon::backend;
-use crate::state::{State, Wallpaper};
+use crate::state::{State, TimePeriod, Wallpaper};
+use crate::localized;
 
-pub fn get_list(state: &State) -> String {
+pub fn get_list(state: &State, is_verbose: bool, term_width: u16) -> String {
     if state.nodes.is_empty() {
         String::from("No wallpapers are found")
+    } else if is_verbose {
+
+        let mut table = Table::new();
+
+        println!("term_width: {term_width}");
+
+        table
+            .load_style(presets::UTF8_FULL)
+            .set_width(term_width)
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_constraints([
+                ColumnConstraint::UpperBoundary(Width::Percentage(25)),
+                ColumnConstraint::UpperBoundary(Width::Percentage(25)),
+                ColumnConstraint::UpperBoundary(Width::Percentage(50)),
+            ])
+            .set_header(localized!(
+                vec!["Mode",  "Period", "Path"],
+                vec!["Режим", "Период", "Путь"]
+            ));
+        
+        let home = env::home_dir()
+            .and_then(|home| home.to_str().map(String::from))
+            .filter(|home| !home.is_empty())
+            .map(|home| if home.ends_with('/') { home } else { home + "/" });
+
+        for node in state.nodes.values() {
+            let node = node.borrow();
+            let path = node.path();
+
+            let path = if let Some(ref home) = home && path.starts_with(home) {
+                String::from("~/") + &path[home.len()..]
+            } else {
+                String::from(path)
+            };
+
+            table.add_row(vec![
+                node.mode.to_string(),
+                TimePeriod::opt_to_string(&node.period),
+                path,
+            ]);
+        }
+
+        table.to_string()
+
     } else {
         format!(
             "Wallpapers:\n{}",
             state.nodes.values()
-                .map(|node| node.borrow().path().clone())
+                .map(|node| String::from(node.borrow().path()))
                 .format("\n")
         )
     }
