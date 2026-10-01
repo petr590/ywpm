@@ -80,11 +80,11 @@ pub fn get_terminal_width() -> u16 {
 
 #[macro_export]
 macro_rules! localized {
-    ($en_msg:expr, $ru_msg:expr $(,)?) => {
-        if *crate::util::IS_RU {
-            $ru_msg
+    ($en_expr:expr, $ru_expr:expr $(,)?) => {
+        if !*crate::util::IS_RU {
+            $en_expr
         } else {
-            $en_msg
+            $ru_expr
         }
     };
 }
@@ -92,10 +92,20 @@ macro_rules! localized {
 #[macro_export]
 macro_rules! format_localized {
     ($en_fmt:expr, $ru_fmt:expr $(, $arg:expr)* $(,)?) => {
-        if *crate::util::IS_RU {
-            format!($ru_fmt $(, $arg)*)
-        } else {
-            format!($en_fmt $(, $arg)*)
-        }
+        crate::localized!(
+            format!($en_fmt $(, $arg)*),
+            format!($ru_fmt $(, $arg)*),
+        )
+    };
+}
+
+
+#[macro_export]
+macro_rules! writeln_localized {
+    ($stream:expr, $en_fmt:expr, $ru_fmt:expr $(, $arg:expr)* $(,)?) => {
+        crate::localized!(
+            writeln!($stream, $en_fmt $(, $arg)*),
+            writeln!($stream, $ru_fmt $(, $arg)*),
+        )
     };
 }

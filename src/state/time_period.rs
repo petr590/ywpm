@@ -13,28 +13,18 @@ pub struct TimePeriod {
 
 impl fmt::Display for TimePeriod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let format = if *IS_RU {
-            "%d %B %Y, %H:%M"
-        } else {
-            "%B %d %Y, %H:%M"
-        };
-        let locale = if *IS_RU {
-            Locale::ru_RU
-        } else {
-            Locale::default()
-        };
+        let format = if *IS_RU { "%d %B %Y, %H:%M" } else { "%B %d %Y, %H:%M" };
+        let locale = if *IS_RU { Locale::ru_RU     } else { Locale::default() };
 
         if self.since.date() == self.until.date() {
             write!(
-                f,
-                "{} - {}",
+                f, "{} - {}",
                 self.since.and_utc().format_localized(format, locale),
                 self.until.and_utc().format_localized("%H:%M", locale)
             )
         } else {
             write!(
-                f,
-                "{} - {}",
+                f, "{} - {}",
                 self.since.and_utc().format_localized(format, locale),
                 self.until.and_utc().format_localized(format, locale)
             )
@@ -61,8 +51,10 @@ impl TimePeriod {
     }
 
     pub fn is_none_or_now(period: &Option<TimePeriod>) -> bool {
+        let now = Local::now().naive_local();
+
         period.as_ref()
-            .is_none_or(|period| period.is_datetime_in_bounds(&Local::now().naive_local()))
+            .is_none_or(|period| period.is_datetime_in_bounds(&now))
     }
 
     pub(crate) fn opt_to_string(period: &Option<TimePeriod>) -> String {

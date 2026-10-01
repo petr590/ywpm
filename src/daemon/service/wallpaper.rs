@@ -1,6 +1,9 @@
-use crate::{action_perform_error_localized, format_localized};
+use std::fmt::Write;
+
+use crate::daemon::service::media;
+use crate::{action_perform_error_localized, format_localized, writeln_localized};
 use crate::cli::{ParsedTimePeriod, Settings};
-use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
+use crate::core::{ActionPerformError, ActionResult, ActionSuccess, Warning};
 use crate::daemon::backend;
 use crate::state::{SharedWallpaperNode, State, TimePeriod};
 
@@ -46,7 +49,47 @@ pub fn get_current(state: &State, is_verbose: bool) -> ActionResult {
         ))?;
     
     if is_verbose {
-        todo!("get image size")
+        let mut message = String::new();
+        let mut warning = Warning::new();
+
+        let _ = writeln_localized!(
+            message, 
+            "Path: {path}",
+            "Путь: {path}",
+        );
+
+        if let Some(node) = state.find_closest_node(&path) {
+            let _ = writeln_localized!(
+                message,
+                "Mode: {}",
+                "Режим: {}",
+                node.borrow().mode
+            );
+
+            let _ = writeln_localized!(
+                message,
+                "Period: {}",
+                "Период: {}",
+                TimePeriod::opt_to_string(&node.borrow().period)
+            );
+        }
+
+        match media::get_resolution(&path) {
+            Ok(resolution) => {
+                let _ = writeln_localized!(
+                    message,
+                    "Resolution: {resolution}",
+                    "Разрешение: {resolution}",
+                );
+            }
+
+            Err(warn) => {
+                warning.append(warn.message());
+            }
+        }
+
+        Ok(ActionSuccess { message, warning })
+
     } else {
         Ok(ActionSuccess::with_message(path))
     }

@@ -24,6 +24,18 @@ impl Warning {
         }
     }
 
+    pub fn with_msg_path(message: &str, path: &str) -> Self {
+        let mut warning = Self::new();
+        warning.append_msg_path(message, path);
+        warning
+    }
+
+    pub fn with_msg_error_path(message: &str, err: &dyn Error, path: &str) -> Self {
+        let mut warning = Self::new();
+        warning.append_msg_error_path(message, err, path);
+        warning
+    }
+
     pub fn message(&self) -> &str {
         &self.message
     }

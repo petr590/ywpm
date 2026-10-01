@@ -240,12 +240,12 @@ impl State {
     }
 
     pub fn normalize(&mut self) -> &mut Self {
-        self.clear_expired_peroids();
+        self.clear_expired_periods();
         self.clear_redundant_paths();
         self
     }
 
-    fn clear_expired_peroids(&mut self) {
+    fn clear_expired_periods(&mut self) {
         let now = Local::now().naive_local();
 
         for node in self.nodes.values_mut() {

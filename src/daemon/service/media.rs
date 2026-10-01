@@ -3,8 +3,7 @@ use std::fmt::Write;
 
 use comfy_table::{ContentArrangement, Table, presets};
 use display_info::DisplayInfo;
-use ffprobe::FfProbeError;
-use imagesize::ImageError;
+use imagesize::{ImageError, ImageResult};
 use indexmap::IndexSet;
 use itertools::Itertools;
 
@@ -19,7 +18,7 @@ pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Optio
     let display_res = get_display_resolution(display_id)?;
 
     let (wallpapers, mut warning) = get_wallpapers(state, paths);
-    let (info_map, warning2)      = get_media_info(wallpapers);
+    let (info_map, warning2)      = get_media_info_for_all(wallpapers);
 
     warning.append(warning2.message());
 
@@ -121,7 +120,7 @@ struct MediaInfo {
     pub mode: DisplayMode,
 }
 
-fn get_media_info<I>(wallpapers: I) -> (HashMap<String, MediaInfo>, Warning)
+fn get_media_info_for_all<I>(wallpapers: I) -> (HashMap<String, MediaInfo>, Warning)
 where
     I: IntoIterator<Item = Wallpaper, IntoIter: ExactSizeIterator>,
 {
@@ -133,72 +132,89 @@ where
     for wallpaper in iter {
         let path = wallpaper.path();
 
-        match imagesize::size(path) {
-            Ok(size) => {
-                let Wallpaper { path, mode } = wallpaper;
-
-                let prev = info_map.insert(
-                    path,
-                    MediaInfo {
-                        resolution: Resolution::new(size.width as u64, size.height as u64),
-                        is_video: false,
-                        mode,
-                    },
-                );
+        match get_image_resolution(wallpaper.path()) {
+            Ok(resolution) => {
+                let prev = info_map.insert(wallpaper.path, MediaInfo {
+                    resolution,
+                    is_video: false,
+                    mode: wallpaper.mode,
+                });
 
                 assert!(prev.is_none());
             }
 
             Err(ImageError::CorruptedImage) => warning.append_msg_path("Image corrupted", path),
-
-            _ => rest.push(wallpaper),
+            Err(_) => rest.push(wallpaper),
         }
     }
 
     for wallpaper in rest {
-        let path = wallpaper.path();
+        match get_video_resolution(wallpaper.path()) {
+            Ok(resolution) => {
+                let prev = info_map.insert(wallpaper.path, MediaInfo {
+                    resolution,
+                    is_video: true,
+                    mode: wallpaper.mode
+                });
 
-        match ffprobe::ffprobe(&path) {
-            Ok(ffprobe) => {
-                let stream = ffprobe
-                    .streams
-                    .iter()
-                    .find(|stream| is_codec_type_video(&stream.codec_type));
-
-                match stream {
-                    Some(stream) => {
-                        let Wallpaper { path, mode } = wallpaper;
-
-                        let file_info = match (stream.width, stream.height) {
-                            (Some(width), Some(height)) => MediaInfo {
-                                resolution: Resolution::new(width as u64, height as u64),
-                                is_video: true,
-                                mode,
-                            },
-
-                            _ => {
-                                warning.append_msg_path("Unable to get video resolution", &path);
-                                continue;
-                            }
-                        };
-
-                        let prev = info_map.insert(path, file_info);
-                        assert!(prev.is_none());
-                    }
-
-                    None => warning.append_msg_path("File doesn't contain video stream", path),
-                }
+                assert!(prev.is_none());
             }
 
-            Err(FfProbeError::Io(err)) => {
-                warning.append_msg_error_path("ffprobe I/O error", &err, path)
-            }
-            Err(err) => warning.append_msg_error_path("ffprobe error", &err, path),
-        };
+            Err(warn) => warning.append(warn.message()),
+        }
     }
 
     (info_map, warning)
 }
+
+
+pub(super) fn get_resolution(path: &str) -> Result<Resolution, Warning> {
+    match get_image_resolution(path) {
+        Ok(resolution) => return Ok(resolution),
+        Err(ImageError::CorruptedImage) => return Err(Warning::with_msg_path("Image corrupted", path)),
+        Err(_) => {}
+    }
+
+    Ok(get_video_resolution(path)?)
+}
+
+
+fn get_image_resolution(path: &str) -> ImageResult<Resolution> {
+    let size = imagesize::size(path)?;
+
+    Ok(Resolution::new(
+        size.width as u64,
+        size.height as u64
+    ))
+}
+
+fn get_video_resolution(path: &str) -> Result<Resolution, Warning> {
+    let ffprobe = ffprobe::ffprobe(path)
+        .map_err(|err| Warning::with_msg_error_path("ffprobe error", &err, path))?;
+
+    let stream = ffprobe.streams.iter()
+        .find(|stream| is_codec_type_video(&stream.codec_type));
+
+    match stream {
+        Some(stream) => {
+            match (stream.width, stream.height) {
+                (Some(width), Some(height)) => {
+                    Ok(Resolution::new(
+                        width as u64,
+                        height as u64
+                    ))
+                }
+
+                _ => {
+                    Err(Warning::with_msg_path("Unable to get video resolution", path))
+                }
+            }
+        }
+
+        None => Err(Warning::with_msg_path("File doesn't contain video stream", path)),
+    }
+}
+
 
 fn is_codec_type_video(codec_type: &Option<String>) -> bool {
     codec_type.as_ref().is_some_and(|codec_type| codec_type == "video")
