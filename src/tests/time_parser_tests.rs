@@ -1,6 +1,6 @@
-use chrono::{Days, Duration, Local, NaiveDate, Timelike};
+use chrono::{Days, Local, NaiveDate, Timelike};
 
-use crate::cli::{ArgParseError, parse_duration, parse_time_to_minutes};
+use crate::cli::{ArgParseError, CliDuration, parse_duration, parse_time_to_minutes};
 use crate::assert_is_err;
 
 #[test]
@@ -50,19 +50,19 @@ fn check_time_parses_fails() {
 
 #[test]
 fn check_duration_parses_normally() -> Result<(), ArgParseError> {
-    assert_eq!(parse_duration("2m")?,   Duration::minutes(2));
-    assert_eq!(parse_duration("3h")?,   Duration::hours(3));
-    assert_eq!(parse_duration("100d")?, Duration::days(100));
-    assert_eq!(parse_duration("100w")?, Duration::weeks(100));
-    assert_eq!(parse_duration("5y")?,   Duration::days(5 * 365));
+    assert_eq!(parse_duration("2m")?,   CliDuration::minutes(2));
+    assert_eq!(parse_duration("3h")?,   CliDuration::hours(3));
+    assert_eq!(parse_duration("100d")?, CliDuration::days(100));
+    assert_eq!(parse_duration("100w")?, CliDuration::weeks(100));
+    assert_eq!(parse_duration("5y")?,   CliDuration::days(5 * 365));
 
-    assert_eq!(parse_duration("2mins")?,      Duration::minutes(2));
-    assert_eq!(parse_duration("3   hrs")?,    Duration::hours(3));
-    assert_eq!(parse_duration("100 days")?,   Duration::days(100));
-    assert_eq!(parse_duration("125 months")?, Duration::days(125 * 30));
-    assert_eq!(parse_duration("5\t years")?,  Duration::days(5 * 365));
+    assert_eq!(parse_duration("2mins")?,      CliDuration::minutes(2));
+    assert_eq!(parse_duration("3   hrs")?,    CliDuration::hours(3));
+    assert_eq!(parse_duration("100 days")?,   CliDuration::days(100));
+    assert_eq!(parse_duration("125 months")?, CliDuration::days(125 * 30));
+    assert_eq!(parse_duration("5\t years")?,  CliDuration::days(5 * 365));
 
-    assert_eq!(parse_duration("32:59")?, Duration::hours(32) + Duration::minutes(59));
+    assert_eq!(parse_duration("32:59")?, CliDuration::minutes(32 * 60 + 59));
 
     Ok(())
 }

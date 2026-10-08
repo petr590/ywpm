@@ -19,6 +19,24 @@ macro_rules! GROUP_NAME {
     }
 }
 
+macro_rules! MANDATORY_PATHS {
+    () => {
+        localized!(
+            "Mandatory list of paths",
+            "Обязательный список путей"
+        )
+    };
+}
+
+macro_rules! OPTIONAL_PATHS {
+    () => {
+        localized!(
+            "Optional list of paths",
+            "Необязательный список путей"
+        )
+    };
+}
+
 #[derive(Debug, PartialEq, Subcommand)]
 pub enum ActionSubcommand {
     #[command(
@@ -48,11 +66,8 @@ pub enum ActionSubcommand {
         )]
         path: String,
 
-        #[command(flatten)]
-        settings: Settings,
-
-        #[command(flatten)]
-        period: ParsedTimePeriod,
+        #[command(flatten)] settings: Settings,
+        #[command(flatten)] period: ParsedTimePeriod,
     },
 
 
@@ -106,20 +121,32 @@ pub enum ActionSubcommand {
     AddNodes {
         #[arg(
             required = true,
-            num_args = 1..,
             value_hint = ValueHint::AnyPath,
-            help = localized!(
-                "Mandatory list of paths",
-                "Обязательный список путей"
-            )
+            help = MANDATORY_PATHS!()
         )]
         paths: Vec<String>,
 
-        #[command(flatten)]
-        settings: Settings,
+        #[command(flatten)] settings: Settings,
+        #[command(flatten)] period: ParsedTimePeriod,
+    },
 
-        #[command(flatten)]
-        period: ParsedTimePeriod,
+
+    #[command(
+        name = "update",
+        about = localized!(
+            "Update folder/file settings. If not specified, it is updated for current",
+            "Обновить настройки папки/файла. Если не указано, обновляется для текущего"
+        )
+    )]
+    UpdateNodes {
+        #[arg(
+            value_hint = ValueHint::AnyPath,
+            help = OPTIONAL_PATHS!()
+        )]
+        paths: Vec<String>,
+
+        #[command(flatten)] settings: Settings,
+        #[command(flatten)] period: ParsedTimePeriod,
     },
 
 
@@ -133,12 +160,8 @@ pub enum ActionSubcommand {
     RemoveNodes {
         #[arg(
             required = true,
-            num_args = 1..,
             value_hint = ValueHint::AnyPath,
-            help = localized!(
-                "Mandatory list of paths",
-                "Обязательный список путей"
-            )
+            help = MANDATORY_PATHS!()
         )]
         paths: Vec<String>,
     },
@@ -183,8 +206,8 @@ pub enum ActionSubcommand {
         name: String,
 
         #[arg(
-            num_args = 0..,
             value_hint = ValueHint::AnyPath,
+            help = OPTIONAL_PATHS!()
         )]
         paths: Vec<String>,
     },
@@ -213,8 +236,8 @@ pub enum ActionSubcommand {
 
         #[arg(
             required = true,
-            num_args = 1..,
             value_hint = ValueHint::AnyPath,
+            help = MANDATORY_PATHS!()
         )]
         paths: Vec<String>,
     },
@@ -230,8 +253,8 @@ pub enum ActionSubcommand {
 
         #[arg(
             required = true,
-            num_args = 1..,
             value_hint = ValueHint::AnyPath,
+            help = MANDATORY_PATHS!()
         )]
         paths: Vec<String>,
     },

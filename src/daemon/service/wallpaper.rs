@@ -40,13 +40,17 @@ pub fn restore(state: &mut State) -> Result<(), ActionPerformError> {
     Ok(())
 }
 
-pub fn get_current(state: &State, is_verbose: bool) -> ActionResult {
-    let path = state.current_wallpaper_path
+pub fn current_wallpaper_path_or_error(state: &State) -> Result<String, ActionPerformError> {
+    state.current_wallpaper_path
         .clone()
         .ok_or_else(|| action_perform_error_localized!(
             "No wallpaper is set",
             "Обои не установлены"
-        ))?;
+        ))
+}
+
+pub fn get_current(state: &State, is_verbose: bool) -> ActionResult {
+    let path = current_wallpaper_path_or_error(state)?;
     
     if is_verbose {
         let mut message = String::new();
@@ -78,8 +82,9 @@ pub fn get_current(state: &State, is_verbose: bool) -> ActionResult {
             Ok(resolution) => {
                 let _ = writeln_localized!(
                     message,
-                    "Resolution: {resolution}",
-                    "Разрешение: {resolution}",
+                    "Resolution: {}, {}",
+                    "Разрешение: {}, {}",
+                    resolution, resolution.ratio_str()
                 );
             }
 

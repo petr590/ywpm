@@ -29,11 +29,12 @@ pub(crate) fn run(wallpaper: &Wallpaper) -> Result<(), Box<dyn Error>> {
         );
 
         let mode_opt = match mode.fit_mode {
-            FitMode::Cover   => "panscan=1",
-            FitMode::Contain => "panscan=0",
-            FitMode::Stretch => "video-aspect=0",
+            FitMode::Cover   => "--panscan=1",
+            FitMode::Contain => "--panscan=0",
+            FitMode::Stretch => "--no-keepaspect",
         };
 
+        /*
         let (align_x, align_y) = match mode.alignment {
             Alignment::Center => ( "0",  "0"),
             Alignment::Top    => ( "0", "-1"),
@@ -41,16 +42,31 @@ pub(crate) fn run(wallpaper: &Wallpaper) -> Result<(), Box<dyn Error>> {
             Alignment::Left   => ("-1",  "0"),
             Alignment::Right  => ( "1",  "0"),
         };
+        */
+
+        let align_x = match mode.alignment {
+            Alignment::Left   => "-1",
+            Alignment::Right  =>  "1",
+            _                 =>  "0",
+        };
+
+        let align_y = match mode.alignment {
+            Alignment::Top    => "-1",
+            Alignment::Bottom =>  "1",
+            _                 =>  "0",
+        };
 
         let child = Command::new("mpvpaper")
-            .arg("-o") // spline36
+            .arg("-o")
+            // spline36
+            // Дефисы оставлены для читаемости. Можно удалить.
             .arg(formatdoc! {"
                 --loop=inf --image-display-duration=inf --ao=null
                 --vo=gpu --hwdec=auto --video-sync=display-resample
                 --scale=bilinear --cscale=bilinear --dscale=bilinear
                 --stop-screensaver=no --osc=no --config=no --load-scripts=no
-                term-status-msg= video-unscaled=no
-                {mode_opt} video-align-x={align_x} video-align-y={align_y}
+                --term-status-msg= --video-unscaled=no
+                {mode_opt} --video-align-x={align_x} --video-align-y={align_y}
             "})
             .arg("ALL")
             .arg(wallpaper.path())

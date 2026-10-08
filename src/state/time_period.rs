@@ -3,7 +3,7 @@ use std::fmt;
 use chrono::{Local, Locale, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 
-use crate::util::IS_RU;
+use crate::localized;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct TimePeriod {
@@ -13,8 +13,15 @@ pub struct TimePeriod {
 
 impl fmt::Display for TimePeriod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let format = if *IS_RU { "%d %B %Y, %H:%M" } else { "%B %d %Y, %H:%M" };
-        let locale = if *IS_RU { Locale::ru_RU     } else { Locale::default() };
+        let format = localized!(
+            "%B %-d, %Y, %H:%M",
+            "%-d %B %Y, %H:%M"
+        );
+
+        let locale = localized!(
+            Locale::default(),
+            Locale::ru_RU
+        );
 
         if self.since.date() == self.until.date() {
             write!(

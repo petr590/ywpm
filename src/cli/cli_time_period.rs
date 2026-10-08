@@ -1,9 +1,9 @@
-use chrono::{Duration, Local, NaiveDateTime, Timelike};
+use chrono::{Local, NaiveDateTime, Timelike};
 use clap::Args;
 use clap::error::ErrorKind;
 use indoc::indoc;
 
-use crate::cli::{ParsedTimePeriod, time_parser};
+use crate::cli::{CliDuration, ParsedTimePeriod, time_parser};
 use crate::state::TimePeriod;
 use crate::localized;
 
@@ -44,20 +44,22 @@ pub struct CliTimePeriod {
         conflicts_with = "until",
         help = localized!(
             indoc! {"
-                Period duration (e.g.: 30m, 40 minutes, 12h, 3d, 2w, 5 month, 1 year, 20:30).
-                Months and years are counted as 30 and 365 days, respectively
+                Period duration (e.g.: 30m, 40 minutes, 12h, 3d, 2w, 5 month,
+                1 year, 20:30).
             "},
             indoc! {"
-                Длительность периода (например: 30m, 40 minutes, 12h, 3d, 2w, 5 month, 1 year,
-                20:30). Месяцы и годы считаются по 30 и 365 дней соответственно
+                Длительность периода (например: 30m, 40 minutes, 12h, 3d, 2w,
+                5 month, 1 year, 20:30).
             "}
         )
     )]
-    pub(crate) duration: Option<Duration>,
+    pub(crate) duration: Option<CliDuration>,
 }
 
 impl CliTimePeriod {
     
+    pub(crate) const ALL_OPTIONS: &str = "--since, --until, --duration";
+
     pub(crate) const fn is_none(&self) -> bool {
         self.since.is_none() &&
         self.until.is_none() &&

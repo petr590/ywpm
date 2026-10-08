@@ -211,7 +211,6 @@ impl State {
 
 
     // ------------------------------------------ Other -------------------------------------------
-
     pub fn get_timeout(&self) -> PollTimeout {
         let now = Local::now().naive_local();
 

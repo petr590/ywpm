@@ -7,11 +7,19 @@ use imagesize::{ImageError, ImageResult};
 use indexmap::IndexSet;
 use itertools::Itertools;
 
-use crate::{action_perform_error_localized, localized};
+use crate::{action_perform_error_localized, format_localized, localized, util};
 use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
 use crate::daemon::service::resolution::Resolution;
 use crate::core::Warning;
 use crate::state::{DisplayMode, SharedWallpaperNode, State, Wallpaper};
+
+
+struct Row {
+    path: String,
+    resolution: Resolution,
+    diff_percent: u64,
+    is_wider: bool,
+}
 
 
 pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Option<u32>, is_verbose: bool, term_width: u16) -> ActionResult {
@@ -26,6 +34,23 @@ pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Optio
     let mut message = String::new();
 
     if is_verbose {
+        let mut non_fitting = Vec::new();
+        
+        find_non_fitting_of(&display_res, info_map,
+            |path, info| {
+                let resolution = info.resolution;
+                let (diff_percent, is_wider) = resolution.calculate_difference_in_percent(&display_res);
+                non_fitting.push(Row { path, resolution, diff_percent, is_wider });
+            }
+        );
+
+        non_fitting.sort_by(|row1, row2| {
+            row1.is_wider.cmp(&row2.is_wider)
+                .then_with(|| row1.diff_percent.cmp(&row2.diff_percent))
+                .then_with(|| row1.path.cmp(&row2.path))
+        });
+
+
         let mut table = Table::new();
 
         table
@@ -33,19 +58,21 @@ pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Optio
             .set_width(term_width)
             .set_content_arrangement(ContentArrangement::Dynamic)
             .set_header(localized!(
-                ["Resolution", "Ratio",       "Path"],
-                ["Разрешение", "Соотношение", "Путь"],
+                ["Resolution", "Ratio",       "Difference", "Path"],
+                ["Разрешение", "Соотношение", "Разница",    "Путь"],
             ));
         
-        find_non_fitting_of(&display_res, info_map,
-            |path, info| {
-                table.add_row([
-                    info.resolution.to_string(),
-                    info.resolution.ratio_str(),
-                    path
-                ]);
-            }
-        );
+
+        let home = util::get_home_with_slash();
+
+        for Row { path, resolution, diff_percent, is_wider } in non_fitting {
+            table.add_row([
+                resolution.to_string(),
+                resolution.ratio_str(),
+                diff_to_str(diff_percent, is_wider),
+                util::replace_home_with_tilde(&home, &path)
+            ]);
+        }
 
         let _ = writeln!(message, "{table}");
         let _ = writeln!(message, "Display: {}, {}", display_res, display_res.ratio_str());
@@ -58,10 +85,41 @@ pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Optio
         );
     }
     
-    Ok(ActionSuccess {
-        message,
-        warning,
-    })
+    Ok(ActionSuccess { message, warning })
+}
+
+
+fn find_non_fitting_of(display_res: &Resolution, info_map: HashMap<String, MediaInfo>, mut consumer: impl FnMut(String, MediaInfo)) {
+
+    for (path, info) in info_map {
+        if info.is_video {
+            if info.resolution != *display_res {
+                consumer(path, info)
+            }
+
+        } else {
+            if  info.mode.is_default() &&
+                !info.resolution.ratio_equals(display_res)
+            {
+                consumer(path, info)
+            }
+        };
+    }
+}
+
+
+fn diff_to_str(diff_percent: u64, is_wider: bool) -> String {
+    let diff_str = if diff_percent > 0 {
+        diff_percent.to_string()
+    } else {
+        String::from("<1")
+    };
+
+    if is_wider {
+        format_localized!("wider by {diff_str}%", "шире на {diff_str}%")
+    } else {
+        format_localized!("taller by {diff_str}%", "выше на {diff_str}%")
+    }
 }
 
 
@@ -175,7 +233,7 @@ pub(super) fn get_resolution(path: &str) -> Result<Resolution, Warning> {
         Err(_) => {}
     }
 
-    Ok(get_video_resolution(path)?)
+    get_video_resolution(path)
 }
 
 
@@ -218,22 +276,4 @@ fn get_video_resolution(path: &str) -> Result<Resolution, Warning> {
 
 fn is_codec_type_video(codec_type: &Option<String>) -> bool {
     codec_type.as_ref().is_some_and(|codec_type| codec_type == "video")
-}
-
-fn find_non_fitting_of(display_res: &Resolution, info_map: HashMap<String, MediaInfo>, mut consumer: impl FnMut(String, MediaInfo)) {
-
-    for (path, info) in info_map {
-        if info.is_video {
-            if info.resolution != *display_res {
-                consumer(path, info)
-            }
-
-        } else {
-            if  info.mode.is_default() &&
-                !info.resolution.ratio_equals(display_res)
-            {
-                consumer(path, info)
-            }
-        };
-    }
 }

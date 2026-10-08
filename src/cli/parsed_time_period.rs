@@ -36,11 +36,9 @@ impl FromArgMatches for ParsedTimePeriod {
 impl ParsedTimePeriod {
     pub fn unwrap(&self) -> &TimePeriod {
         match self {
-            Self::Set(period) => period,
-            Self::NotSpecified => {
-                panic!("called `unwrap()` on a `ParsedTimePeriod::NotSpecified` value")
-            }
-            Self::Reset => panic!("called `unwrap()` on a `ParsedTimePeriod::Reset` value"),
+            Self::Set(period)  => period,
+            Self::NotSpecified => panic!("called `unwrap()` on a `ParsedTimePeriod::NotSpecified` value"),
+            Self::Reset        => panic!("called `unwrap()` on a `ParsedTimePeriod::Reset` value"),
         }
     }
 }

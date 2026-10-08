@@ -1,8 +1,9 @@
-use chrono::{DateTime, Days, Duration, Local, NaiveDateTime, NaiveTime, Timelike};
+use chrono::{DateTime, Days, Local, NaiveDateTime, NaiveTime, Timelike};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::arg_parse_error_localized;
+use crate::cli::cli_duration::CliDuration;
 use crate::cli::error::ArgParseError;
 
 fn parse_time(input: &str) -> Result<NaiveDateTime, ArgParseError> {
@@ -69,28 +70,32 @@ static ZERO_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^0+$").unwrap())
 static NUM_AND_UNIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^(\d+)\s*(\w+)$").unwrap());
 static TIME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^(\d+):(\d{1,2})$").unwrap());
 
-pub(crate) fn parse_duration(input: &str) -> Result<Duration, ArgParseError> {
+pub(crate) fn parse_duration(input: &str) -> Result<CliDuration, ArgParseError> {
     let input = input.trim().to_lowercase();
 
     if ZERO_REGEX.is_match(&input) {
-        return Ok(Duration::zero());
+        return Ok(CliDuration::Seconds(0));
     }
 
     if let Some(caps) = NUM_AND_UNIT_REGEX.captures(&input) {
         let value: i64 = caps[1].parse().map_err(|_| {
-            arg_parse_error_localized!("Invalid number: {}", "Недопустимое число: {}", &caps[1])
+            arg_parse_error_localized!(
+                "Invalid number: {}",
+                "Недопустимое число: {}",
+                &caps[1]
+            )
         })?;
 
         let unit = &caps[2];
 
         return Ok(match unit {
-            "m" | "min" | "mins" | "minute" | "minutes" => Duration::minutes(value),
-            "h" | "hr"  | "hrs"  | "hour"   | "hours"   => Duration::hours(value),
+            "m" | "min" | "mins" | "minute" | "minutes" => CliDuration::minutes(value),
+            "h" | "hr"  | "hrs"  | "hour"   | "hours"   => CliDuration::hours(value),
 
-            "d" | "day"  | "days"           => Duration::days(value),
-            "w" | "week" | "weeks"          => Duration::days(value * 7),
-            "month" | "months"              => Duration::days(value * 30),
-            "y" | "yr"   | "year" | "years" => Duration::days(value * 365),
+            "d" | "day"   | "days"           => CliDuration::days(value),
+            "w" | "week"  | "weeks"          => CliDuration::weeks(value),
+                  "month" | "months"         => CliDuration::months(i64_to_u32(value, unit)?),
+            "y" | "yr"    | "year" | "years" => CliDuration::years(i64_to_u32(value, unit)?),
 
             _ => {
                 return Err(arg_parse_error_localized!(
@@ -120,11 +125,20 @@ pub(crate) fn parse_duration(input: &str) -> Result<Duration, ArgParseError> {
                 )
             })?;
 
-        return Ok(Duration::hours(hours) + Duration::minutes(minutes));
+        return Ok(CliDuration::minutes(hours * 60 + minutes));
     }
 
     Err(arg_parse_error_localized!(
         "Invalid duration value: {input}",
         "Недопустимое значение длительности: {input}"
     ))
+}
+
+
+fn i64_to_u32(value: i64, unit: &str) -> Result<u32, ArgParseError> {
+    u32::try_from(value)
+        .map_err(|_| arg_parse_error_localized!(
+            "Period is too big: {value} {unit}",
+            "Период слишком большой: {value} {unit}"
+        ))
 }

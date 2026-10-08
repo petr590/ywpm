@@ -32,6 +32,17 @@ impl Resolution {
 
         format!("{w}:{h}")
     }
+
+    pub fn calculate_difference_in_percent(&self, other: &Resolution) -> (u64, bool) {
+        let a = self.width * other.height;
+        let b = self.height * other.width;
+
+        if a > b { // self wider than other
+            (div_round(100 * (a - b), b), true)
+        } else {
+            (div_round(100 * (b - a), a), false)
+        }
+    }
 }
 
 fn gcd(mut a: u64, mut b: u64) -> u64 {
@@ -41,4 +52,8 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
         a = tmp;
     }
     a
+}
+
+fn div_round(a: u64, b: u64) -> u64 {
+    (a + b / 2) / b
 }

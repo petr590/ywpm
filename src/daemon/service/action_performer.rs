@@ -1,4 +1,5 @@
-use crate::cli::{ActionSubcommand::{self, *}, Cli};
+use crate::cli::ActionSubcommand::{self, *};
+use crate::cli::Cli;
 use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
 use crate::daemon::service::{config, group, media, node, wallpaper};
 use crate::state::State;
@@ -26,10 +27,13 @@ fn perform(subcommand: ActionSubcommand, state: &mut State, is_verbose: bool, te
         ResetWallpaper                          => wallpaper::reset(state),
         RestoreWallpaper                        => wallpaper::restore(state)?,
 
-        GetNodeList                          => return Ok(node::get_list(state, is_verbose, term_width).into()),
-        AddNodes { paths, settings, period } => node::add(state, &paths, &settings, period)?,
-        RemoveNodes { paths }                => node::remove(state, &paths),
-        ClearNodes                           => node::clear(state),
+        GetNodeList => return Ok(node::get_list(state, is_verbose, term_width).into()),
+
+        AddNodes    { paths, settings, period } => node::add_or_update(state, &paths, &settings, period)?,
+        UpdateNodes { paths, settings, period } => node::update(state, paths, &settings, period)?,
+        
+        RemoveNodes { paths } => node::remove(state, &paths),
+        ClearNodes            => node::clear(state),
 
         GetGroupList                               => return Ok(group::get_list(state).into()),
         GetGroup        { name }                   => return group::get_info(state, &name),

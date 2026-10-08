@@ -65,6 +65,7 @@ ywpm random
 
 **Examples:**
 * `ywpm set /path/to/file.png` - set the wallpaper for the current session (or until the next any change of period)
+* `ywpm update --mode=right` - update the current wallpaper mode to right, cover
 * `ywpm reset` - reset the wallpaper. It will show a gray/black screen
 * `ywpm get` or `ywpm get -v` - view the current wallpaper. The **-v** flag shows additional information
 * `ywpm list` or `ywpm list -v` - view all wallpapers
@@ -74,7 +75,7 @@ ywpm random
 
 ## Advanced usage. Options
 ### -m, --mode
-Wallpaper display mode. You can set vertical alignment (top/center/bottom), horizontal alignment (left/center/right), and stretching mode:
+Wallpaper display mode. You can set alignment (top / bottom / left / right / center) and stretching mode:
 
 * `cover` - Crops the edges, preserves proportions
 * `contain` - Leaves empty space at the edges, preserves proportions
@@ -93,7 +94,7 @@ Level of recursive file search in the folder. Range: `1..65535`
 **Default:** `1`
 
 ## Advanced usage. Time periods
-A wallpaper or a group of wallpapers can be set for a specific time period. If several wallpapers and/or groups are set at some point, random wallpapers are selected from all installed ones with equal probability. To set a period, there are 3 options: **--since**, **--until**, and **--duration**. The **--until** and **--duration** options cannot be specified simultaneously. If the **--since** option is specified, then one of the **--until** or **--duration** options must be specified — the program does not allow you to set the wallpaper indefinitely. If you still want to, you can set it for 1,000 years in advance: **--duration=1,000y**
+A wallpaper or a group of wallpapers can be set for a specific time period. If several wallpapers and/or groups are set at some point, random wallpapers are selected from all installed ones with equal probability. To set a period, there are 3 options: **--since**, **--until**, and **--duration**. The **--until** and **--duration** options cannot be specified simultaneously. If the **--since** option is specified, then one of the **--until** or **--duration** options must be specified — the program does not allow you to set the wallpaper indefinitely. If you still want to, you can set it for 1000 years in advance: **--duration=1000y**
 
 ### -s, --since
 The start of the period with minute‑level precision. Does not take the time zone into account. You can specify the integer and fractional parts of seconds and the time zone. They will be ignored. This decision was made to ensure compatibility with the most common time formats.
@@ -121,8 +122,12 @@ Duration of the period.
 * `30m`, `30 minutes` - half an hour
 * `12h`, `12 hours` - 12 hours
 * `2w` - 2 weeks
-* `5 month` - 5 months. Months are counted as 30 days
-* `1 y` - 5 years. * `20:30` - The format here is the same as for **--since** (except for `now` and `tomorrow`)
+* `5 month` - 5 months
+* `1 y` - 1 year
+* `20:30` - The format here is the same as for **--since** (except for `now` and `tomorrow`)
+* `0` - zero duration. It is needed to reset the period
+
+**Default:** \<not specified\>
 
 ## Advanced usage. Groups
 A group in ywpm is, in fact, a group of files and/or folders. You can do almost everything with groups that you can do with individual folders/files - set them via `set` (in which case a random file from the group is selected), schedule them for a certain period. However, the **--mode** and **--recursive-level** options are not available for groups. Here are all the main actions that can be performed on groups:

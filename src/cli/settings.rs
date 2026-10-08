@@ -17,22 +17,20 @@ pub struct Settings {
         add = ArgValueCompleter::new(DisplayModeCompleter),
         help = localized!(
             indoc! {"
-                Wallpaper display mode. You can set vertical alignment
-                (top/center/bottom), horizontal alignment (left/center/right),
-                and stretch mode:
+                Wallpaper display mode. You can set alignment (top / bottom /
+                left / right / center), and stretch mode:
                 - cover - crops edges, maintains aspect ratio
                 - contain - leaves white space around edges, maintains aspect ratio
                 - stretch - does not maintain aspect ratio, stretching the image
-                Default: 'center cover'
+                Default: center,cover
             "},
             indoc! {"
-                Режим отображения обоев. Можно задать выравнивание по вертикали
-                (top/center/bottom), по горизонтали (left/center/right) и режим
-                растягивания:
+                Режим отображения обоев. Можно задать выравнивание (top /
+                bottom / left / right / center) и режим растягивания:
                 - cover - Обрезает края, сохраняет пропорции
                 - contain - Оставляет пустое место по краям, сохраняет пропорции
                 - stretch - Не сохраняет пропорции, растягивая картинку
-                По умолчанию: 'center cover'
+                По умолчанию: center,cover
             "}
         )
     )]
@@ -49,6 +47,8 @@ pub struct Settings {
 }
 
 impl Settings {
+    pub(crate) const ALL_OPTIONS: &str = "--mode, --recursive-level";
+
     pub const fn new() -> Self {
         Self {
             mode: None,
