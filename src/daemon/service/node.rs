@@ -81,7 +81,7 @@ pub fn add_or_update(state: &mut State, paths: &Vec<String>, settings: &Settings
 
         backend::run(&Wallpaper::from(&*node.borrow())).map_err(|err| {
             state.current_wallpaper_path = None;
-            ActionPerformError::from_boxed(err)
+            ActionPerformError::new(err.to_string())
         })?;
     }
 

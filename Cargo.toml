@@ -1,6 +1,6 @@
 [package]
 name = "ywpm"
-version = "1.2.9"
+version = "1.2.10"
 description = "YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers."
 authors = ["Petr <petrwinch-code@mail.ru>"]
 repository = "https://github.com/petr590/ywpm"

@@ -1,7 +1,7 @@
 use crate::cli::ActionSubcommand::{self, *};
 use crate::cli::Cli;
 use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
-use crate::daemon::service::{config, group, media, node, wallpaper};
+use crate::daemon::service::{config, group, media_fit, node, wallpaper};
 use crate::state::State;
 use crate::util;
 
@@ -45,7 +45,7 @@ fn perform(subcommand: ActionSubcommand, state: &mut State, is_verbose: bool, te
         RemoveGroup     { name }                   => group::remove(state, &name),
 
         FindNonFittingWallpapers { paths, display_id } => {
-            return media::find_non_fitting(state, paths, display_id, is_verbose, term_width);
+            return media_fit::find_non_fitting(state, paths, display_id, is_verbose, term_width);
         },
     }
 

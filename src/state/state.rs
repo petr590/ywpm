@@ -358,6 +358,6 @@ fn run_backend_with_random_wallpaper_impl<'a>(wallpapers: &'a IndexSet<Wallpaper
 
     match backend::run(wallpaper) {
         Ok(())   => Ok(wallpaper),
-        Err(err) => Err(ActionPerformError::from_boxed(err)),
+        Err(err) => Err(ActionPerformError::new(err.to_string())),
     }
 }
