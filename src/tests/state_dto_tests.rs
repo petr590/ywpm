@@ -4,13 +4,14 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 
 use chrono::{Days, Local};
 
+use crate::config::Config;
 use crate::state::{
     Alignment, DisplayMode, FitMode, SharedWallpaperNode, State, TimePeriod, Wallpaper, WallpaperGroup,
 };
 
 #[test]
 fn state_serializes() {
-    let mut state = State::new();
+    let mut state = State::new(create_some_config());
     let wallpaper = add_wallpaper(&mut state, "/a/b/c.jpg", DisplayMode::new(), 1, None).clone();
 
     add_wallpaper(
@@ -24,8 +25,7 @@ fn state_serializes() {
         )),
     );
 
-    state
-        .groups
+    state.groups
         .entry(String::from("some_group"))
         .or_insert_with(WallpaperGroup::new)
         .add(wallpaper);
@@ -103,7 +103,7 @@ fn state_returns_all_wallpapers() {
         Local::now().naive_local() + Days::new(10),
     ));
 
-    let mut state = State::new();
+    let mut state = State::new(create_some_config());
     add_wallpaper(&mut state, "/tmp/ywpm-test/", mode.clone(), 2, period);
 
     let (wallpapers, _) = state.find_all_child_wallpapers(state.nodes.values());
@@ -119,4 +119,8 @@ fn state_returns_all_wallpapers() {
 
     assert!(!wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/unaccessible.jpeg",  mode.clone())));
     assert!(!wallpapers.contains(&Wallpaper::new("/tmp/ywpm-test/broken_symlink.png", mode.clone())));
+}
+
+fn create_some_config() -> Config {
+	Config::new("/tmp/state.yaml", None, None)
 }

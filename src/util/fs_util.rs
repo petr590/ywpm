@@ -3,7 +3,6 @@ use std::path::Path;
 
 use path_absolutize::Absolutize;
 
-const PROGRAM_DIR: &str = "ywpm";
 const SOCKET_NAME: &str = "ywpmd.sock";
 const CONFIG_NAME: &str = "config.yaml";
 
@@ -13,8 +12,8 @@ mod debug {
     use super::*;
     use std::path::PathBuf;
 
-    pub fn get_config_path() -> PathBuf {
-        PathBuf::from(const_str::concat!("/tmp/", PROGRAM_DIR, "/", CONFIG_NAME))
+    pub fn get_config_paths() -> Vec<PathBuf> {
+        vec![PathBuf::from(const_str::concat!("./debug-files/", CONFIG_NAME))]
     }
 
     pub fn get_socket_path() -> String {
@@ -28,32 +27,42 @@ mod release {
     use std::env;
     use std::path::PathBuf;
 
-    pub fn get_config_path() -> PathBuf {
-        let mut path = env::home_dir().expect("Couldn't get home directory");
-        path.push(const_str::concat!(".config/", PROGRAM_DIR, "/", CONFIG_NAME));
-        path
+    pub fn get_config_paths() -> Vec<PathBuf> {
+		vec![
+			PathBuf::from(const_str::concat!("/etc/ywpm/", CONFIG_NAME)),
+			get_path("XDG_CONFIG_HOME", ".config/", const_str::concat!("ywpm/", CONFIG_NAME))
+		]
     }
 
     pub fn get_socket_path() -> String {
-        if let Ok(runtime_dir) = env::var("XDG_RUNTIME_DIR") {
-            let mut path = PathBuf::from(runtime_dir);
-            path.push(SOCKET_NAME);
-            path.to_string_lossy().into_owned()
+		get_path("XDG_RUNTIME_DIR", ".local/share/ywpm/", SOCKET_NAME)
+			.to_string_lossy().into_owned()
+    }
+
+	fn get_path(env_var: &str, default_path: &str, rest_path: &str) -> PathBuf {
+		let var = env::var(env_var)
+			.ok().filter(|var| !var.is_empty());
+
+		let mut path = if let Some(runtime_dir) = var {
+            PathBuf::from(runtime_dir)
 
         } else {
             let mut path = env::home_dir().expect("Couldn't get home directory");
-            path.push(const_str::concat!(".local/share/", SOCKET_NAME));
-            path.to_string_lossy().into_owned()
-        }
-    }
+            path.push(default_path);
+            path
+        };
+
+		path.push(rest_path);
+		path
+	}
 }
 
 
 #[cfg(debug_assertions)]
-pub use debug::{get_config_path, get_socket_path};
+pub use debug::{get_config_paths, get_socket_path};
 
 #[cfg(not(debug_assertions))]
-pub use release::{get_config_path, get_socket_path};
+pub use release::{get_config_paths, get_socket_path};
 
 
 pub(crate) fn canonicalize_path(cwd: &str, path: &str) -> String {

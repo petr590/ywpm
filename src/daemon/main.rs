@@ -13,14 +13,19 @@ use std::path::Path;
 use std::process::exit;
 
 use ywpm::cli::Cli;
+use ywpm::config::Config;
 use ywpm::core::ActionPerformError;
 use ywpm::daemon::{backend, service};
-use ywpm::daemon::service::{config, wallpaper};
+use ywpm::daemon::service::{state_io, wallpaper};
 use ywpm::state::State;
 use ywpm::util::{self, ReadWriteError};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut state = config::read_or_create_empty(util::get_config_path())?;
+	let config = Config::read_first_existing(&util::get_config_paths())?;
+
+	println!("State path: {}", config.state_path());
+
+    let mut state = state_io::read_or_create_empty(config)?;
 
     let socket = if env::args().count() > 1 {
         perform_initial_action_or_exit(&mut state)
@@ -32,6 +37,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     main_loop(state, socket)
 }
+
 
 fn perform_initial_action_or_exit(state: &mut State) -> Option<String> {
 
@@ -182,7 +188,7 @@ fn shutdown(socket_path: &Path, state: &mut State) {
 
     let _ = std::fs::remove_file(socket_path);
 
-    if let Err(err) = config::write(state.normalize(), util::get_config_path()) {
+    if let Err(err) = state_io::write(state.normalize()) {
         eprintln!("Error while writing config: {}", err.to_string());
     }
 

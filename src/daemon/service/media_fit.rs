@@ -125,7 +125,7 @@ fn diff_to_str(diff_percent: u64, is_wider: bool) -> String {
 }
 
 
-fn get_display_resolution(display_id: Option<u32>) -> Result<Resolution, ActionPerformError> {
+pub(crate) fn get_display_resolution(display_id: Option<u32>) -> Result<Resolution, ActionPerformError> {
     let infos = DisplayInfo::all()
         .map_err(|error| ActionPerformError::new(error.to_string()))?;
 
@@ -140,7 +140,10 @@ fn get_display_resolution(display_id: Option<u32>) -> Result<Resolution, ActionP
         let info = infos.iter().find(|info| info.id == display_id);
 
         match info {
-            Some(info) => Ok(Resolution::new(info.width, info.height)),
+            Some(info) => Ok(Resolution::new(
+				info.width as u64,
+				info.height as u64
+			)),
 
             None => Err(action_perform_error_localized!(
                 "Display with ID {display_id} not found",
@@ -149,7 +152,10 @@ fn get_display_resolution(display_id: Option<u32>) -> Result<Resolution, ActionP
         }
 
     } else if infos.len() == 1 {
-        Ok(Resolution::new(infos[0].width, infos[0].height))
+        Ok(Resolution::new(
+			infos[0].width as u64,
+			infos[0].height as u64
+		))
 
     } else {
         Err(action_perform_error_localized!(

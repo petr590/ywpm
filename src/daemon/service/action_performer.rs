@@ -1,9 +1,8 @@
 use crate::cli::ActionSubcommand::{self, *};
 use crate::cli::Cli;
 use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
-use crate::daemon::service::{config, group, media_fit, node, wallpaper};
+use crate::daemon::service::{state_io, group, media_fit, node, wallpaper};
 use crate::state::State;
-use crate::util;
 
 pub fn perform_action_and_update_config(cli: Cli, state: &mut State, term_width: u16) -> ActionResult {
     let is_verbose = cli.is_verbose();
@@ -11,7 +10,7 @@ pub fn perform_action_and_update_config(cli: Cli, state: &mut State, term_width:
 
     perform(cli.subcommand_move(), state, is_verbose, term_width).and_then(|msg| {
         if needs_update {
-            config::write(state.normalize(), util::get_config_path())
+            state_io::write(state.normalize())
                 .map_err(ActionPerformError::from_boxed)?;
         }
 

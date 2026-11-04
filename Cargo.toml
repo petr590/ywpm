@@ -1,6 +1,6 @@
 [package]
 name = "ywpm"
-version = "1.2.10"
+version = "1.2.11"
 description = "YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers."
 authors = ["Petr <petrwinch-code@mail.ru>"]
 repository = "https://github.com/petr590/ywpm"
@@ -14,19 +14,23 @@ extended-description = """\
 YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers.
 YoRHa Wallpaper Manager is a modern, user-friendly command-line tool that helps \
 you manage all your wallpapers on Linux. Please note that YWpM only determines \
-when and which wallpapers to render, it doesn’t render the wallpapers itself. \
+when and which wallpapers to render, it doesn't render the wallpapers itself. \
 Instead, YWpM uses a backend. Currently, only mpvpaper is supported as a backend.\
 """
+conf-files = ["/etc/ywpm/config.yaml"]
 assets = [
-    ["target/release/ywpmd",  "usr/libexec/ywpmd",                  "755"],
-    ["target/release/ywpm",   "usr/bin/ywpm",                       "755"],
-    ["systemd/ywpmd-pre.sh",  "usr/libexec/ywpmd-pre.sh",           "755"],
-    ["systemd/ywpmd.service", "usr/lib/systemd/user/ywpmd.service", "644"],
+    ["target/release/ywpmd",         "usr/libexec/ywpmd",                  "755"],
+    ["target/release/ywpm",          "usr/bin/ywpm",                       "755"],
+    ["assets/systemd/ywpmd-pre.sh",  "usr/libexec/ywpmd-pre.sh",           "755"],
+    ["assets/systemd/ywpmd.service", "usr/lib/systemd/user/ywpmd.service", "644"],
     
-    ["completions/ywpm.bash", "usr/share/bash-completion/completions/ywpm",    "644"],
-    ["completions/_ywpm",     "usr/share/zsh/vendor-completions/_ywpm",        "644"],
-    ["completions/ywpm.fish", "usr/share/fish/vendor-completions.d/ywpm.fish", "644"],
-    ["completions/ywpm.elv",  "usr/share/elvish/lib/ywpm.elv",                 "644"],
+    ["assets/completions/ywpm.bash", "usr/share/bash-completion/completions/ywpm",    "644"],
+    ["assets/completions/_ywpm",     "usr/share/zsh/vendor-completions/_ywpm",        "644"],
+    ["assets/completions/ywpm.fish", "usr/share/fish/vendor-completions.d/ywpm.fish", "644"],
+    ["assets/completions/ywpm.elv",  "usr/share/elvish/lib/ywpm.elv",                 "644"],
+
+	["assets/config/config.yaml", "etc/ywpm/config.yaml",    "644"],
+	["assets/scripts/*",          "usr/share/ywpm/scripts/", "755"],
 ]
 
 [package.metadata.deb.variants.ru]
@@ -40,24 +44,22 @@ YoRHa Wallpaper Manager — это современный, удобный кон
 """
 
 [package.metadata.generate-rpm]
-summary = """\
-YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers.
-YoRHa Wallpaper Manager is a modern, user-friendly command-line tool that helps \
-you manage all your wallpapers on Linux. Please note that YWpM only determines \
-when and which wallpapers to render, it doesn’t render the wallpapers itself. \
-Instead, YWpM uses a backend. Currently, only mpvpaper is supported as a backend.\
-"""
+# Баганая хрень - cargo-generate-rpm дублирует эту строку. Поэтому по минимуму
+summary = "YoRHa Wallpaper Manager. A simple console tool for easy management of your wallpapers."
 assets = [
-    { source = "target/release/ywpmd",  dest = "/usr/libexec/ywpmd",                  mode = "0755" },
-    { source = "target/release/ywpm",   dest = "/usr/bin/ywpm",                       mode = "0755" },
-    { source = "systemd/ywpmd-pre.sh",  dest = "/usr/libexec/ywpmd-pre.sh",           mode = "0755" },
-    { source = "systemd/ywpmd.service", dest = "/usr/lib/systemd/user/ywpmd.service", mode = "0644" },
-    { source = "LICENSE.txt",           dest = "/usr/share/doc/ywpm/LICENSE",         mode = "0644" },
+    { source = "target/release/ywpmd",         dest = "/usr/libexec/ywpmd",                  mode = "0755" },
+    { source = "target/release/ywpm",          dest = "/usr/bin/ywpm",                       mode = "0755" },
+    { source = "assets/systemd/ywpmd-pre.sh",  dest = "/usr/libexec/ywpmd-pre.sh",           mode = "0755" },
+    { source = "assets/systemd/ywpmd.service", dest = "/usr/lib/systemd/user/ywpmd.service", mode = "0644" },
+    { source = "LICENSE.txt",                  dest = "/usr/share/doc/ywpm/LICENSE",         mode = "0644" },
     
-    { source = "completions/ywpm.bash", dest = "usr/share/bash-completion/completions/ywpm",    mode = "0644" },
-    { source = "completions/_ywpm",     dest = "usr/share/zsh/vendor-completions/_ywpm",        mode = "0644" },
-    { source = "completions/ywpm.fish", dest = "usr/share/fish/vendor-completions.d/ywpm.fish", mode = "0644" },
-    { source = "completions/ywpm.elv",  dest = "usr/share/elvish/lib/ywpm.elv",                 mode = "0644" },
+    { source = "assets/completions/ywpm.bash", dest = "/usr/share/bash-completion/completions/ywpm",    mode = "0644" },
+    { source = "assets/completions/_ywpm",     dest = "/usr/share/zsh/vendor-completions/_ywpm",        mode = "0644" },
+    { source = "assets/completions/ywpm.fish", dest = "/usr/share/fish/vendor-completions.d/ywpm.fish", mode = "0644" },
+    { source = "assets/completions/ywpm.elv",  dest = "/usr/share/elvish/lib/ywpm.elv",                 mode = "0644" },
+
+	{ source = "assets/config/config.yaml", dest = "/etc/ywpm/config.yaml",    mode = "644", config = "noreplace" },
+	{ source = "assets/scripts/*",          dest = "/usr/share/ywpm/scripts/", mode = "755" },
 ]
 
 
@@ -82,6 +84,7 @@ sd-notify       = "0.5"
 serde           = { version = "1.0", features = ["rc"] }
 serde_with      = { version = "3.23", features = ["chrono"] }
 shlex           = "2.0"
+strum           = { version = "0.28", features = ["derive"] }
 walkdir         = "2.5"
 yaml_serde      = { version = "0.10", default-features = false }
 

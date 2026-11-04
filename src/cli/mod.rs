@@ -1,6 +1,7 @@
 mod action_subcommand;
 mod cli;
 mod cli_duration;
+mod cli_duration_parser;
 mod cli_time_period;
 mod error;
 mod parsed_time_period;
@@ -17,4 +18,7 @@ pub(crate) use parsed_time_period::ParsedTimePeriod;
 pub(crate) use settings::Settings;
 
 #[cfg(test)]
-pub(crate) use time_parser::{parse_duration, parse_time_to_minutes};
+pub(crate) use cli_duration_parser::parse_duration;
+
+#[cfg(test)]
+pub(crate) use time_parser::parse_time_to_minutes;

@@ -81,7 +81,7 @@ pub(crate) fn get_media_type(path: &str) -> Result<MediaType, Warning> {
     }
 }
 
-pub(super) fn get_resolution(path: &str) -> Result<Resolution, Warning> {
+pub(crate) fn get_resolution(path: &str) -> Result<Resolution, Warning> {
     match get_image_resolution(path) {
         Ok(resolution)                  => return Ok(resolution),
         Err(ImageError::CorruptedImage) => return Err(Warning::with_msg_path("Image corrupted", path)),

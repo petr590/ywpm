@@ -104,6 +104,7 @@ The start of the period with minute‑level precision. Does not take the time zo
 * `14:00` - today at 14:00
 * `2026-06-11 12:00`
 * `27 jul 2026 20:08:32 +0000` - turns into `2026-07-27 20:08`
+* `+10h` - current time plus 10 hours (works with minutes, hours, days, weeks, months and years)
 * `now` - current time
 * `tomorrow` - current time plus one day
 

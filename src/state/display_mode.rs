@@ -2,17 +2,20 @@ use std::{error::Error, fmt};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use strum::Display;
 
 use names::*;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[strum(serialize_all = "lowercase")]
 pub enum FitMode {
     Cover,
     Contain,
     Stretch,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[strum(serialize_all = "lowercase")]
 pub enum Alignment {
     Center,
     Top,

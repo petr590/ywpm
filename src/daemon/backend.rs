@@ -3,10 +3,9 @@ use std::io;
 use std::path::Path;
 use std::process::{Child, Command};
 
-use indoc::formatdoc;
-
-use crate::daemon::service::{self, MediaType};
-use crate::state::{Alignment, FitMode, Wallpaper};
+use crate::config::Config;
+use crate::daemon::service::{self, MediaType, Resolution};
+use crate::state::Wallpaper;
 
 thread_local! {
     static CHILD: RefCell<Option<Child>> = RefCell::new(None);
@@ -16,60 +15,55 @@ pub(crate) fn is_running() -> bool {
     CHILD.with_borrow(|child| child.is_some())
 }
 
-pub(crate) fn run(wallpaper: &Wallpaper) -> Result<(), io::Error> {
+pub(crate) fn run(config: &Config, wallpaper: &Wallpaper) -> Result<(), io::Error> {
     stop();
 
     assert!(Path::new(wallpaper.path()).is_file());
 
     CHILD.with_borrow_mut(|opt| -> Result<(), io::Error> {
-        let mode = wallpaper.mode();
+		let path = wallpaper.path();
+		let mode = wallpaper.mode();
 
-        println!(
-            "Starting 'mpvpaper'. Mode: '{}', path: '{}'",
-            mode, wallpaper.path()
-        );
+		let media_type = service::get_media_type(path);
 
-        let scale = match service::get_media_type(wallpaper.path()){
-            Ok(MediaType::Image)          => "spline36",
-            Ok(MediaType::Video) | Err(_) => "bilinear",
-        };
+		if let Err(ref warning) = media_type {
+			eprintln!("Warning: {warning}");
+		}
 
-        let mode_opt = match mode.fit_mode {
-            FitMode::Cover   => "--panscan=1",
-            FitMode::Contain => "--panscan=0",
-            FitMode::Stretch => "--no-keepaspect",
-        };
+		let media_type_str = match media_type {
+			Ok(MediaType::Image) => "image",
+			Ok(MediaType::Video) => "video",
+			Err(_)               => "unknown",
+		};
 
-        let align_x = match mode.alignment {
-            Alignment::Left   => "-1",
-            Alignment::Right  =>  "1",
-            _                 =>  "0",
-        };
+		let command = match media_type {
+			Ok(MediaType::Image) | Err(_) => config.images_command(),
+			Ok(MediaType::Video)          => config.video_command(),
+		};
 
-        let align_y = match mode.alignment {
-            Alignment::Top    => "-1",
-            Alignment::Bottom =>  "1",
-            _                 =>  "0",
-        };
+		let image_res = service::get_resolution(path)
+			.unwrap_or_else(|_| Resolution::new(0, 0));
+		
+		let display_res = service::get_display_resolution(None)
+			.unwrap_or_else(|_| Resolution::new(0, 0));
 
-        let child = Command::new("mpvpaper")
-            .arg("-o")
-            // Дефисы оставлены для читаемости. Можно удалить.
-            .arg(formatdoc! {"
-                --loop=inf --image-display-duration=inf --ao=null
-                --vo=gpu --hwdec=auto --video-sync=display-resample
-                --scale={scale} --cscale={scale} --dscale={scale}
-                --stop-screensaver=no --osc=no --config=no --load-scripts=no
-                --term-status-msg= --video-unscaled=no
-                {mode_opt} --video-align-x={align_x} --video-align-y={align_y}
-            "})
-            .arg("ALL")
-            .arg(wallpaper.path())
-            .spawn()?;
-
-        *opt = Some(child);
-
-        println!("Started 'mpvpaper'");
+		let child = Command::new("sh")
+			.arg("-c")
+			.arg(command.clone().unwrap()) // TODO?
+			.env("FILE_PATH",     wallpaper.path())
+			.env("MEDIA_TYPE",    media_type_str)
+			.env("FIT_MODE",      format!("{:?}", mode.fit_mode).to_ascii_lowercase())
+			.env("ALIGNMENT",     format!("{:?}", mode.alignment).to_ascii_lowercase())
+			.env("IMAGE_WIDTH",   image_res.width.to_string())
+			.env("IMAGE_HEIGHT",  image_res.height.to_string())
+			.env("SCREEN_WIDTH",  display_res.width.to_string())
+			.env("SCREEN_HEIGHT", display_res.height.to_string())
+			.stdout(std::process::Stdio::inherit())
+			.stderr(std::process::Stdio::inherit())
+			.spawn()?;
+		
+		*opt = Some(child);
+		println!("Child process started");
 
         Ok(())
     })?;
@@ -82,20 +76,20 @@ pub fn stop() {
         if let Some(child) = opt {
             match child.kill() {
                 Ok(()) => {}
-                Err(err) => eprintln!("Error while killing 'mpvpaper': {err}"),
+                Err(err) => eprintln!("Error while killing child process: {err}"),
             }
 
             match child.wait() {
                 Ok(status) => {
                     if !status.success() {
-                        eprintln!("Process 'mpvpaper' returned status: {status}");
+                        eprintln!("Child process returned status: {status}");
                     }
                 }
 
-                Err(err) => eprintln!("Error while waiting for 'mpvpaper': {err}"),
+                Err(err) => eprintln!("Error while waiting for child process: {err}"),
             }
 
-            println!("Process 'mpvpaper' stopped");
+            println!("Child process stopped");
         }
     });
 }

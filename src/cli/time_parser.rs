@@ -1,10 +1,14 @@
 use chrono::{DateTime, Days, Local, NaiveDateTime, NaiveTime, Timelike};
-use once_cell::sync::Lazy;
-use regex::Regex;
 
 use crate::arg_parse_error_localized;
-use crate::cli::cli_duration::CliDuration;
+use crate::cli::cli_duration_parser;
 use crate::cli::error::ArgParseError;
+
+pub(crate) fn parse_time_to_minutes(input: &str) -> Result<NaiveDateTime, ArgParseError> {
+    Ok(parse_time(input)?
+        .with_second(0).unwrap()
+        .with_nanosecond(0).unwrap())
+}
 
 fn parse_time(input: &str) -> Result<NaiveDateTime, ArgParseError> {
     let input = input.trim().to_lowercase();
@@ -18,6 +22,13 @@ fn parse_time(input: &str) -> Result<NaiveDateTime, ArgParseError> {
         }
 
         _ => {}
+    }
+
+    if input.starts_with('+') {
+        let duration = cli_duration_parser::parse_num_and_unit(&input[1..])?
+            .ok_or_else(|| cli_duration_parser::invalid_duration_error(&input))?;
+
+        return Ok(Local::now().naive_local() + duration);
     }
 
     if input.contains('-') && input.contains(':') {
@@ -56,89 +67,4 @@ fn parse_time(input: &str) -> Result<NaiveDateTime, ArgParseError> {
         "Invalid date/time value: '{input}'",
         "Недопустимое значение даты/времени: '{input}'"
     ))
-}
-
-pub(crate) fn parse_time_to_minutes(input: &str) -> Result<NaiveDateTime, ArgParseError> {
-    Ok(parse_time(input)?
-        .with_second(0)
-        .unwrap()
-        .with_nanosecond(0)
-        .unwrap())
-}
-
-static ZERO_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^0+$").unwrap());
-static NUM_AND_UNIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^(\d+)\s*(\w+)$").unwrap());
-static TIME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^(\d+):(\d{1,2})$").unwrap());
-
-pub(crate) fn parse_duration(input: &str) -> Result<CliDuration, ArgParseError> {
-    let input = input.trim().to_lowercase();
-
-    if ZERO_REGEX.is_match(&input) {
-        return Ok(CliDuration::Seconds(0));
-    }
-
-    if let Some(caps) = NUM_AND_UNIT_REGEX.captures(&input) {
-        let value: i64 = caps[1].parse().map_err(|_| {
-            arg_parse_error_localized!(
-                "Invalid number: {}",
-                "Недопустимое число: {}",
-                &caps[1]
-            )
-        })?;
-
-        let unit = &caps[2];
-
-        return Ok(match unit {
-            "m" | "min" | "mins" | "minute" | "minutes" => CliDuration::minutes(value),
-            "h" | "hr"  | "hrs"  | "hour"   | "hours"   => CliDuration::hours(value),
-
-            "d" | "day"   | "days"           => CliDuration::days(value),
-            "w" | "week"  | "weeks"          => CliDuration::weeks(value),
-                  "month" | "months"         => CliDuration::months(i64_to_u32(value, unit)?),
-            "y" | "yr"    | "year" | "years" => CliDuration::years(i64_to_u32(value, unit)?),
-
-            _ => {
-                return Err(arg_parse_error_localized!(
-                    "Unknown unit: {unit}",
-                    "Неизвестная единица измерения: {unit}",
-                ));
-            }
-        });
-    }
-
-    if let Some(caps) = TIME_REGEX.captures(&input) {
-        let hours: i64 = caps[1].parse().map_err(|_| {
-            arg_parse_error_localized!(
-                "Invalid hours: {}",
-                "Недопустимое количество часов: {}",
-                &caps[1]
-            )
-        })?;
-
-        let minutes: i64 = caps[2].parse().ok()
-            .filter(|mins| (0..60).contains(mins))
-            .ok_or_else(|| {
-                arg_parse_error_localized!(
-                    "Invalid minutes: {}",
-                    "Недопустимое количество минут: {}",
-                    &caps[2]
-                )
-            })?;
-
-        return Ok(CliDuration::minutes(hours * 60 + minutes));
-    }
-
-    Err(arg_parse_error_localized!(
-        "Invalid duration value: {input}",
-        "Недопустимое значение длительности: {input}"
-    ))
-}
-
-
-fn i64_to_u32(value: i64, unit: &str) -> Result<u32, ArgParseError> {
-    u32::try_from(value)
-        .map_err(|_| arg_parse_error_localized!(
-            "Period is too big: {value} {unit}",
-            "Период слишком большой: {value} {unit}"
-        ))
 }

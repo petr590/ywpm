@@ -13,16 +13,17 @@ use walkdir::WalkDir;
 
 use crate::action_perform_error_localized;
 use crate::cli::{ParsedTimePeriod, Settings};
+use crate::config::Config;
 use crate::core::ActionPerformError;
 use crate::daemon::backend;
 use crate::core::Warning;
-use crate::state::dtos::StateDto;
 use crate::state::{
-    DisplayMode, SharedWallpaperNode, TimePeriod, Wallpaper, WallpaperGroup, WallpaperNode,
+    DisplayMode, SharedWallpaperNode, StateDto, TimePeriod, Wallpaper, WallpaperGroup, WallpaperNode,
 };
 
 #[derive(Debug, Clone)]
 pub struct State {
+	config: Config,
     pub current_wallpaper_path: Option<String>,
     pub nodes: HashMap<String, SharedWallpaperNode>,
     pub groups: HashMap<String, WallpaperGroup>,
@@ -31,15 +32,24 @@ pub struct State {
 impl State {
     // ----------------------------------------- Creation -----------------------------------------
 
-    pub fn new() -> Self {
+	pub fn config(&self) -> &Config {
+		&self.config
+	}
+
+	pub fn path(&self) -> &str {
+		self.config.state_path()
+	}
+
+    pub fn new(config: Config) -> Self {
         Self {
+			config,
             current_wallpaper_path: None,
             nodes: HashMap::new(),
             groups: HashMap::new(),
         }
     }
 
-    pub fn from_dto(dto: StateDto) -> Self {
+    pub fn from_dto(config: Config, dto: StateDto) -> Self {
         let nodes = dto.nodes.into_iter()
             .map(|node| {
                 let path = String::from(node.borrow().path());
@@ -51,6 +61,7 @@ impl State {
             .collect();
 
         Self {
+			config,
             current_wallpaper_path: dto.current_wallpaper_path.clone(),
             nodes,
             groups,
@@ -200,7 +211,7 @@ impl State {
     }
 
     pub(crate) fn run_backend_with_random_wallpaper<'a>(&mut self, wallpapers: &'a IndexSet<Wallpaper>) -> Result<&'a Wallpaper, ActionPerformError> {
-        let result = run_backend_with_random_wallpaper_impl(wallpapers);
+        let result = run_backend_with_random_wallpaper_impl(&self.config, wallpapers);
 
         self.current_wallpaper_path = result
             .as_ref().ok()
@@ -344,7 +355,7 @@ fn check_accessible(path: impl AsRef<Path>, warning: &mut Warning) -> bool {
 }
 
 
-fn run_backend_with_random_wallpaper_impl<'a>(wallpapers: &'a IndexSet<Wallpaper>) -> Result<&'a Wallpaper, ActionPerformError> {
+fn run_backend_with_random_wallpaper_impl<'a>(config: &Config, wallpapers: &'a IndexSet<Wallpaper>) -> Result<&'a Wallpaper, ActionPerformError> {
     if wallpapers.is_empty() {
         backend::stop();
 
@@ -356,7 +367,7 @@ fn run_backend_with_random_wallpaper_impl<'a>(wallpapers: &'a IndexSet<Wallpaper
 
     let wallpaper = &wallpapers[random_range(0..wallpapers.len())];
 
-    match backend::run(wallpaper) {
+    match backend::run(config, wallpaper) {
         Ok(())   => Ok(wallpaper),
         Err(err) => Err(ActionPerformError::new(err.to_string())),
     }

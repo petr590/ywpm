@@ -1,7 +1,4 @@
 #[cfg(test)]
-mod arg_parser_tests;
-
-#[cfg(test)]
 mod cli_tests;
 
 #[cfg(test)]

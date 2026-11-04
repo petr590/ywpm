@@ -3,19 +3,19 @@ use std::env;
 use crossterm::terminal;
 use once_cell::sync::Lazy;
 
+pub fn get_terminal_width() -> u16 {
+    match terminal::size() {
+        Ok((w, _h)) => w,
+        Err(_) => 80,
+    }
+}
+
 pub static IS_RU: Lazy<bool> = Lazy::new(|| {
     env::var("LANG")
         .unwrap_or_default()
         .to_ascii_lowercase()
         .starts_with("ru")
 });
-
-pub fn get_terminal_width() -> u16 {
-    match terminal::size() {
-        Ok((width, _height)) => width,
-        Err(_) => 80,
-    }
-}
 
 #[macro_export]
 macro_rules! localized {

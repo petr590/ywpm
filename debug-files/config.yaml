@@ -1,0 +1,2 @@
+state-path: /tmp/ywpm/state.yaml
+images-command: ~/.config/ywpm/scripts/set-wallpaper-kde.sh "$FILE_PATH" "$MEDIA_TYPE" "$FIT_MODE" "$ALIGNMENT" "$IMAGE_WIDTH" "$IMAGE_HEIGHT" "$SCREEN_WIDTH" "$SCREEN_HEIGHT"

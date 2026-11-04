@@ -106,13 +106,15 @@ pub fn set(state: &mut State, path: impl Into<String>, settings: &Settings, peri
 
     if TimePeriod::is_none_or_now(&node.borrow().period) {
         set_node(state, [&node])
-    } else {
+
+    } else if let ParsedTimePeriod::Set(period) = period {
         Ok(format_localized!(
-            "The wallpaper is scheduled for the {}: '{}'",
-            "Установка обоев запланирована на период {}: '{}'",
-            period.unwrap(),
-            path
+            "The wallpaper is scheduled for the {period}: '{path}'",
+            "Установка обоев запланирована на период {period}: '{path}'",
         ).into())
+
+    } else {
+        Ok("".into())
     }
 }
 

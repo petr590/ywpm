@@ -35,7 +35,10 @@ pub fn get_list(state: &State, is_verbose: bool, term_width: u16) -> String {
         
         let home = util::get_home_with_slash();
 
-        for node in state.nodes.values() {
+        let nodes = state.nodes.values()
+            .sorted_by(|node1, node2| node1.borrow().path().cmp(node2.borrow().path()));
+
+        for node in nodes {
             let node = node.borrow();
 
             let recursive_level = if Path::new(node.path()).is_file() {
@@ -79,7 +82,7 @@ pub fn add_or_update(state: &mut State, paths: &Vec<String>, settings: &Settings
     if update_current {
         let node = state.get_or_insert_node(&state.current_wallpaper_path.clone().unwrap());
 
-        backend::run(&Wallpaper::from(&*node.borrow())).map_err(|err| {
+        backend::run(state.config(), &Wallpaper::from(&*node.borrow())).map_err(|err| {
             state.current_wallpaper_path = None;
             ActionPerformError::new(err.to_string())
         })?;

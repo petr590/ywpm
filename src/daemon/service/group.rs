@@ -76,13 +76,14 @@ pub fn set(state: &mut State, name: &str, settings: &Settings, period: ParsedTim
             wallpaper.path()
         ).into())
 
-    } else {
+    } else if let ParsedTimePeriod::Set(period) = period {
         Ok(format_localized!(
-            "The '{}' wallpaper group is scheduled for the {}",
-            "Установка группы '{}' запланирована на период {}",
-            name,
-            period.unwrap()
+            "The '{name}' wallpaper group is scheduled for the {period}",
+            "Установка группы '{name}' запланирована на период {period}",
         ).into())
+
+    } else {
+        Ok("".into())
     }
 }
 

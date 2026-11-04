@@ -3,7 +3,7 @@ use clap::Args;
 use clap::error::ErrorKind;
 use indoc::indoc;
 
-use crate::cli::{CliDuration, ParsedTimePeriod, time_parser};
+use crate::cli::{CliDuration, ParsedTimePeriod, cli_duration_parser, time_parser};
 use crate::state::TimePeriod;
 use crate::localized;
 
@@ -16,13 +16,21 @@ macro_rules! clap_error_localized {
 
 
 #[derive(Debug, PartialEq, Args)]
-pub struct CliTimePeriod {
+pub(crate) struct CliTimePeriod {
     #[arg(
         short, long,
         value_parser = time_parser::parse_time_to_minutes,
         help = localized!(
-            "Period start (default: now). Format: \"14:00\", \"2026-06-11 12:00\"",
-            "Начало периода (по умолчанию: now). Формат: \"14:00\", \"2026-06-11 12:00\""
+            indoc! {"
+                Period start. Format: \"14:00\", \"2026-06-11 12:00\",
+                \"+10h\", now, tomorrow.
+                Default: now
+            "},
+            indoc! {"
+                Начало периода. Формат: \"14:00\", \"2026-06-11 12:00\",
+                \"+10h\", now, tomorrow.
+                По умолчанию: now
+            "}
         )
     )]
     pub(crate) since: Option<NaiveDateTime>,
@@ -32,15 +40,21 @@ pub struct CliTimePeriod {
         value_parser = time_parser::parse_time_to_minutes,
         conflicts_with = "duration",
         help = localized!(
-            "Period end. Format: date/time, now, tomorrow",
-            "Конец периода. Формат: дата/время, now, tomorrow"
+            indoc! {"
+                Period start. Format: \"14:00\", \"2026-06-11 12:00\",
+                \"+10h\", now, tomorrow.
+            "},
+            indoc! {"
+                Конец периода. Формат: \"14:00\", \"2026-06-11 12:00\",
+                \"+10h\", now, tomorrow.
+            "}
         )
     )]
     pub(crate) until: Option<NaiveDateTime>,
 
     #[arg(
         short, long,
-        value_parser = time_parser::parse_duration,
+        value_parser = cli_duration_parser::parse_duration,
         conflicts_with = "until",
         help = localized!(
             indoc! {"

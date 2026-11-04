@@ -13,10 +13,10 @@ struct DisplayModeProxy {
 #[test]
 fn display_mode_serializes() -> Result<(), yaml_serde::Error> {
     let mode = DisplayMode::new();
-    assert_eq!(mode.to_string(), "cover center");
+    assert_eq!(mode.to_string(), "cover,center");
 
     let proxy = DisplayModeProxy { mode };
-    assert_eq!(yaml_serde::to_string(&proxy)?.trim(), "mode: cover center");
+    assert_eq!(yaml_serde::to_string(&proxy)?.trim(), "mode: cover,center");
 
     Ok(())
 }
@@ -28,17 +28,17 @@ const STRETCH_CENTER: DisplayMode = DisplayMode::new_with_fields(FitMode::Stretc
 
 #[test]
 fn display_mode_to_string() {
-    assert_eq!(CONTAIN_TOP.to_string(),    "contain top");
-    assert_eq!(CONTAIN_RIGHT.to_string(),  "contain right");
-    assert_eq!(CONTAIN_CENTER.to_string(), "contain center");
-    assert_eq!(STRETCH_CENTER.to_string(), "stretch center");
+    assert_eq!(CONTAIN_TOP.to_string(),    "contain,top");
+    assert_eq!(CONTAIN_RIGHT.to_string(),  "contain,right");
+    assert_eq!(CONTAIN_CENTER.to_string(), "contain,center");
+    assert_eq!(STRETCH_CENTER.to_string(), "stretch,center");
 }
 
 #[test]
 fn display_mode_parses() -> Result<(), DisplayModeParseError> {
-    assert_eq!(DisplayMode::from_str("contain top")?,           CONTAIN_TOP);
-    assert_eq!(DisplayMode::from_str("contain right")?,         CONTAIN_RIGHT);
-    assert_eq!(DisplayMode::from_str("contain center")?,        CONTAIN_CENTER);
-    assert_eq!(DisplayMode::from_str("top contain   center ")?, CONTAIN_CENTER);
+    assert_eq!(DisplayMode::from_str("contain top")?,             CONTAIN_TOP);
+    assert_eq!(DisplayMode::from_str("contain right")?,           CONTAIN_RIGHT);
+    assert_eq!(DisplayMode::from_str("contain, center")?,         CONTAIN_CENTER);
+    assert_eq!(DisplayMode::from_str("top contain  ,, center ")?, CONTAIN_CENTER);
     Ok(())
 }

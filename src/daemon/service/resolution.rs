@@ -13,11 +13,8 @@ impl fmt::Display for Resolution {
 }
 
 impl Resolution {
-    pub fn new(width: impl Into<u64>, height: impl Into<u64>) -> Self {
-        Self {
-            width: width.into(),
-            height: height.into(),
-        }
+    pub fn new(width: u64, height: u64) -> Self {
+        Self { width, height }
     }
 
     pub fn ratio_equals(&self, other: &Resolution) -> bool {
