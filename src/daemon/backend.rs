@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::io;
-use std::path::Path;
 use std::process::{Child, Command};
 
 use crate::config::Config;
@@ -18,7 +17,7 @@ pub(crate) fn is_running() -> bool {
 pub(crate) fn run(config: &Config, wallpaper: &Wallpaper) -> Result<(), io::Error> {
     stop();
 
-    assert!(Path::new(wallpaper.path()).is_file());
+    assert!(wallpaper.path().is_file());
 
     CHILD.with_borrow_mut(|opt| -> Result<(), io::Error> {
 		let path = wallpaper.path();
@@ -37,8 +36,16 @@ pub(crate) fn run(config: &Config, wallpaper: &Wallpaper) -> Result<(), io::Erro
 		};
 
 		let command = match media_type {
-			Ok(MediaType::Image) | Err(_) => config.images_command(),
-			Ok(MediaType::Video)          => config.video_command(),
+			Ok(MediaType::Image) => config.images_command(),
+			Ok(MediaType::Video) => config.video_command(),
+			Err(_) => config.images_command()
+					.or(config.video_command())
+		};
+
+		let Some(command) = command else {
+			eprintln!("Backend ran with 'none' command for '{media_type_str}' type");
+			*opt = None;
+			return Ok(());
 		};
 
 		let image_res = service::get_resolution(path)
@@ -49,7 +56,7 @@ pub(crate) fn run(config: &Config, wallpaper: &Wallpaper) -> Result<(), io::Erro
 
 		let child = Command::new("sh")
 			.arg("-c")
-			.arg(command.clone().unwrap()) // TODO?
+			.arg(command)
 			.env("FILE_PATH",     wallpaper.path())
 			.env("MEDIA_TYPE",    media_type_str)
 			.env("FIT_MODE",      format!("{:?}", mode.fit_mode).to_ascii_lowercase())
@@ -89,6 +96,7 @@ pub fn stop() {
                 Err(err) => eprintln!("Error while waiting for child process: {err}"),
             }
 
+			*opt = None;
             println!("Child process stopped");
         }
     });

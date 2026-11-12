@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use std::path::PathBuf;
 
 use crate::daemon::service::media;
 use crate::{action_perform_error_localized, format_localized, writeln_localized};
@@ -31,7 +32,8 @@ pub fn restore(state: &mut State) -> Result<(), ActionPerformError> {
             None => state.get_or_insert_node(&current_path.clone()),
         };
 
-        let (wallpapers, warning) = state.find_all_child_wallpapers([&node]);
+        let mut warning = Warning::new();
+        let wallpapers = state.find_all_child_wallpapers([&node], &mut warning);
         eprint!("{warning}");
 
         state.run_backend_with_random_wallpaper(&wallpapers)?;
@@ -40,7 +42,7 @@ pub fn restore(state: &mut State) -> Result<(), ActionPerformError> {
     Ok(())
 }
 
-pub fn current_wallpaper_path_or_error(state: &State) -> Result<String, ActionPerformError> {
+pub fn current_wallpaper_path_or_error(state: &State) -> Result<PathBuf, ActionPerformError> {
     state.current_wallpaper_path
         .clone()
         .ok_or_else(|| action_perform_error_localized!(
@@ -49,17 +51,17 @@ pub fn current_wallpaper_path_or_error(state: &State) -> Result<String, ActionPe
         ))
 }
 
-pub fn get_current(state: &State, is_verbose: bool) -> ActionResult {
+pub fn get_current(state: &State, is_verbose: bool, warning: &mut Warning) -> ActionResult {
     let path = current_wallpaper_path_or_error(state)?;
     
     if is_verbose {
         let mut message = String::new();
-        let mut warning = Warning::new();
 
         let _ = writeln_localized!(
             message, 
-            "Path: {path}",
-            "Путь: {path}",
+            "Path: {}",
+            "Путь: {}",
+            path.display()
         );
 
         if let Some(node) = state.find_closest_node(&path) {
@@ -93,33 +95,34 @@ pub fn get_current(state: &State, is_verbose: bool) -> ActionResult {
             }
         }
 
-        Ok(ActionSuccess { message, warning })
+        Ok(ActionSuccess::with_message(message))
 
     } else {
-        Ok(ActionSuccess::with_message(path))
+        Ok(ActionSuccess::with_message(path.to_string_lossy()))
     }
 }
 
-pub fn set(state: &mut State, path: impl Into<String>, settings: &Settings, period: ParsedTimePeriod) -> ActionResult {
+pub fn set(state: &mut State, path: impl Into<PathBuf>, settings: &Settings, period: ParsedTimePeriod, warning: &mut Warning) -> ActionResult {
     let path = path.into();
     let node = state.update_node(&path, settings, period.clone());
 
     if TimePeriod::is_none_or_now(&node.borrow().period) {
-        set_node(state, [&node])
+        set_one_of_nodes(state, [&node], warning)
 
     } else if let ParsedTimePeriod::Set(period) = period {
         Ok(format_localized!(
-            "The wallpaper is scheduled for the {period}: '{path}'",
-            "Установка обоев запланирована на период {period}: '{path}'",
+            "The wallpaper is scheduled for the {}: '{}'",
+            "Установка обоев запланирована на период {}: '{}'",
+            period, path.display()
         ).into())
 
     } else {
-        Ok("".into())
+        Ok(ActionSuccess::new())
     }
 }
 
-pub fn set_random(state: &mut State) -> ActionResult {
-    set_node(state, state.find_actual_nodes().iter())
+pub fn set_random(state: &mut State, warning: &mut Warning) -> ActionResult {
+    set_one_of_nodes(state, state.find_actual_nodes().iter(), warning)
 }
 
 pub fn reset(state: &mut State) {
@@ -127,14 +130,14 @@ pub fn reset(state: &mut State) {
     state.current_wallpaper_path = None;
 }
 
-fn set_node<'a>(state: &mut State, nodes: impl IntoIterator<Item = &'a SharedWallpaperNode>) -> ActionResult {
+fn set_one_of_nodes<'a>(state: &mut State, nodes: impl IntoIterator<Item = &'a SharedWallpaperNode>, warning: &mut Warning) -> ActionResult {
 
-    let (wallpapers, warning) = state.find_all_child_wallpapers(nodes);
+    let wallpapers = state.find_all_child_wallpapers(nodes, warning);
     let wallpaper = state.run_backend_with_random_wallpaper(&wallpapers)?;
 
     Ok(format_localized!(
-        "{}Wallpaper set: '{}'",
-        "{}Установлены обои: '{}'",
-        warning, wallpaper.path()
+        "Wallpaper set: '{}'",
+        "Установлены обои: '{}'",
+        wallpaper.path().display()
     ).into())
 }

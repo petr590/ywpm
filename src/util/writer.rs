@@ -23,7 +23,6 @@ pub fn write_string(writer: &mut impl Write, string: &str) -> ReadWriteResult<()
 pub fn write_ok(writer: &mut impl Write, success: ActionSuccess) -> ReadWriteResult<()> {
     write_all(writer, &[0])?;
     write_string(writer, &success.message)?;
-    write_string(writer, success.warning.message())?;
     Ok(())
 }
 

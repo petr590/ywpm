@@ -1,24 +1,28 @@
+use itertools::Itertools;
 use serde::Deserialize;
 
+use std::borrow::Cow;
 use std::error::Error;
 use std::fs;
 use std::io::{self, ErrorKind};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use crate::config::ConfigParseError;
-use crate::{format_localized, localized};
+use crate::daemon::service::MediaType;
+use crate::{format_localized, localized, util};
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    state_path:     String,
-    images_command: Option<String>,
-    video_command:  Option<String>,
+    state_path:     PathBuf,
+    images_command: Option<Rc<str>>,
+    video_command:  Option<Rc<str>>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct ConfigDto {
-    state_path:     String,
+    state_path:     PathBuf,
     images_command: Option<String>,
     video_command:  Option<String>,
     command:        Option<String>,
@@ -50,25 +54,35 @@ impl TryFrom<ConfigDto> for Config {
 			)));
 		}
 
-		if dto.command.is_some() {
-			Ok(Config {
-				state_path:     dto.state_path,
-				images_command: dto.command.clone(),
-				video_command:  dto.command,
-			})
-		} else {
-			Ok(Config {
-				state_path:     dto.state_path,
-				images_command: dto.images_command,
-				video_command:  dto.video_command,
-			})
+		if  dto.command.is_none() &&
+			dto.images_command.is_none() &&
+			dto.video_command.is_none()
+		{
+			return Err(ConfigParseError::new(format_localized!(
+				"One of the parameters must be set: 'command', 'images-command' or 'video-command'",
+				"Должен быть установлен один из параметров: 'command', 'images-command' или 'video-command'"
+			)));
 		}
+
+
+		let state_path = match util::replace_tilde_with_home(&dto.state_path) {
+			Cow::Owned(new_path) => new_path,
+			Cow::Borrowed(_)     => dto.state_path,
+		};
+
+		let cmd1 = dto.command.map(Rc::from);
+		let cmd2 = cmd1.clone();
+
+		let images_command = cmd1.or_else(|| dto.images_command.map(Rc::from));
+		let video_command  = cmd2.or_else(|| dto.video_command.map(Rc::from));
+
+		Ok(Config { state_path, images_command, video_command })
     }
 }
 
 
 impl Config {
-	pub fn new(state_path: impl Into<String>, images_command: Option<String>, video_command: Option<String>) -> Self {
+	pub fn new(state_path: impl Into<PathBuf>, images_command: Option<Rc<str>>, video_command: Option<Rc<str>>) -> Self {
 		Self {
 			state_path: state_path.into(),
 			images_command,
@@ -76,41 +90,75 @@ impl Config {
 		}
 	}
 
-	pub fn read_first_existing(paths: &[impl AsRef<Path>]) -> Result<Self, Box<dyn Error>> {
+	#[track_caller]
+	pub fn read_first_existing<P>(paths: &[P]) -> Result<(Self, &P), Box<dyn Error>>
+	where
+		P: AsRef<Path>
+	{
 		if paths.is_empty() {
-			panic!("Config::read_first_existing: paths must not be empty!");
+			panic!("Paths must not be empty");
 		}
-
-		let mut result = Self::read(&paths[0]);
 		
-		for i in 1..paths.len() {
-			if result.is_ok() {
-				break;
-			}
+		for path in paths {
+			let result = Self::read(path);
+			
+			match result {
+				Ok(config) => {
+					return Ok((config, path))
+				}
 
-			result = Self::read(&paths[i]);
+				Err(err) => {
+					if let Some(io_err) = err.downcast_ref::<io::Error>() &&
+						io_err.kind() == ErrorKind::NotFound
+					{
+						continue;
+					} else {
+						return Err(err);
+					}
+				}
+			}
 		}
 
-		return result;
+		let message = format!(
+			"Config not found in:\n{}",
+			paths.iter()
+				.map(|path| path.as_ref().display())
+				.join("\n")
+		);
+
+		Err(Box::new(io::Error::new(ErrorKind::NotFound, message)))
 	}
 
 	pub fn read(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
 		let path = path.as_ref();
 		let content = wrap_not_found_error(fs::read_to_string(path), path)?;
+
 		let dto: ConfigDto = yaml_serde::from_str(&content)?;
-		Ok(Self::try_from(dto)?)
+		let config = Self::try_from(dto)
+			.map_err(|err| err.prepend_path(path))?;
+		
+		Ok(config)
 	}
 
-	pub fn state_path(&self) -> &str {
+	pub fn state_path(&self) -> &Path {
 		&self.state_path
 	}
 
-	pub fn images_command(&self) -> &Option<String> {
-		&self.images_command
+	pub fn images_command(&self) -> Option<&str> {
+		self.images_command.as_deref()
 	}
 
-	pub fn video_command(&self) ->  &Option<String> {
-		&self.video_command
+	pub fn video_command(&self) -> Option<&str> {
+		self.video_command.as_deref()
+	}
+
+	pub fn media_type_matcher(&self) -> impl Fn(MediaType) -> bool {
+		match (self.images_command.is_some(), self.video_command.is_some()) {
+			(true,  true)  => |_| true,
+			(false, false) => |_| false,
+			(true,  false) => |typ| typ == MediaType::Image,
+			(false, true)  => |typ| typ == MediaType::Video,
+		}
 	}
 }
 

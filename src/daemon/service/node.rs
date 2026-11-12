@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::PathBuf;
 
 use comfy_table::{ColumnConstraint, ContentArrangement, Table, Width, presets};
 use itertools::Itertools;
@@ -12,7 +12,10 @@ use crate::{action_perform_error_localized, localized, util};
 
 pub fn get_list(state: &State, is_verbose: bool, term_width: u16) -> String {
     if state.nodes.is_empty() {
-        return String::from("No wallpapers are found");
+        return String::from(localized!(
+            "No wallpapers are found",
+            "Обои не найдены",
+        ));
     }
     
     if is_verbose {
@@ -33,15 +36,13 @@ pub fn get_list(state: &State, is_verbose: bool, term_width: u16) -> String {
                 vec!["Режим", "Период", "Уровень\nрекурс.", "Путь"]
             ));
         
-        let home = util::get_home_with_slash();
-
         let nodes = state.nodes.values()
             .sorted_by(|node1, node2| node1.borrow().path().cmp(node2.borrow().path()));
 
         for node in nodes {
             let node = node.borrow();
 
-            let recursive_level = if Path::new(node.path()).is_file() {
+            let recursive_level = if node.path().is_file() {
                 String::from("-")
             } else {
                 node.recursive_level.to_string()
@@ -51,23 +52,25 @@ pub fn get_list(state: &State, is_verbose: bool, term_width: u16) -> String {
                 node.mode.to_string(),
                 TimePeriod::opt_to_string(&node.period),
                 recursive_level,
-                util::replace_home_with_tilde(&home, node.path()),
+                util::replace_home_with_tilde(node.path()),
             ]);
         }
 
         table.to_string()
 
     } else {
-        format!(
-            "Wallpapers:\n{}",
-            state.nodes.values()
-                .map(|node| String::from(node.borrow().path()))
-                .format("\n")
-        )
+        let mut result = String::from("Wallpapers:\n");
+
+        for node in state.nodes.values() {
+            result.push_str(&node.borrow().path().to_string_lossy());
+            result.push('\n');
+        }
+
+        result
     }
 }
 
-pub fn add_or_update(state: &mut State, paths: &Vec<String>, settings: &Settings, period: ParsedTimePeriod) -> Result<(), ActionPerformError> {
+pub fn add_or_update(state: &mut State, paths: &Vec<PathBuf>, settings: &Settings, period: ParsedTimePeriod) -> Result<(), ActionPerformError> {
     let mut update_current = false;
 
     for path in paths {
@@ -91,7 +94,7 @@ pub fn add_or_update(state: &mut State, paths: &Vec<String>, settings: &Settings
     Ok(())
 }
 
-pub fn update(state: &mut State, mut paths: Vec<String>, settings: &Settings, period: ParsedTimePeriod) -> Result<(), ActionPerformError> {
+pub fn update(state: &mut State, mut paths: Vec<PathBuf>, settings: &Settings, period: ParsedTimePeriod) -> Result<(), ActionPerformError> {
 
     if settings.is_none() && period == ParsedTimePeriod::NotSpecified {
         return Err(action_perform_error_localized!(
@@ -108,7 +111,7 @@ pub fn update(state: &mut State, mut paths: Vec<String>, settings: &Settings, pe
     add_or_update(state, &paths, &settings, period)
 }
 
-pub fn remove(state: &mut State, paths: &Vec<String>) {
+pub fn remove(state: &mut State, paths: &Vec<PathBuf>) {
     for path in paths {
         if state.current_wallpaper_path
             .as_ref()

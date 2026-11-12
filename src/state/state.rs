@@ -1,21 +1,24 @@
 use std::cell::Ref;
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::fs::{self, File, Metadata};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use chrono::{Local, NaiveDateTime};
 use indexmap::IndexSet;
 use itertools::Itertools;
+use nix::NixPath;
 use nix::poll::PollTimeout;
 use phf::{Set, phf_set};
 use rand::random_range;
 use walkdir::WalkDir;
 
-use crate::action_perform_error_localized;
+use crate::daemon::service::MediaType;
+use crate::{action_perform_error_localized, nzu16};
 use crate::cli::{ParsedTimePeriod, Settings};
 use crate::config::Config;
 use crate::core::ActionPerformError;
-use crate::daemon::backend;
+use crate::daemon::{backend, service};
 use crate::core::Warning;
 use crate::state::{
     DisplayMode, SharedWallpaperNode, StateDto, TimePeriod, Wallpaper, WallpaperGroup, WallpaperNode,
@@ -24,8 +27,8 @@ use crate::state::{
 #[derive(Debug, Clone)]
 pub struct State {
 	config: Config,
-    pub current_wallpaper_path: Option<String>,
-    pub nodes: HashMap<String, SharedWallpaperNode>,
+    pub current_wallpaper_path: Option<PathBuf>,
+    pub nodes: HashMap<PathBuf, SharedWallpaperNode>,
     pub groups: HashMap<String, WallpaperGroup>,
 }
 
@@ -36,7 +39,7 @@ impl State {
 		&self.config
 	}
 
-	pub fn path(&self) -> &str {
+	pub fn path(&self) -> &Path {
 		self.config.state_path()
 	}
 
@@ -50,11 +53,13 @@ impl State {
     }
 
     pub fn from_dto(config: Config, dto: StateDto) -> Self {
-        let nodes = dto.nodes.into_iter()
+        let nodes = dto.nodes
+            .into_iter()
             .map(|node| {
-                let path = String::from(node.borrow().path());
+                let path = PathBuf::from(node.borrow().path());
                 (path, node)
-            }).collect();
+            })
+            .collect();
 
         let groups = dto.groups.into_iter()
             .map(|(name, group_dto)| (name, WallpaperGroup::from_dto(group_dto, &nodes)))
@@ -89,14 +94,18 @@ impl State {
 
     // ------------------------------------------ Nodes -------------------------------------------
 
-    pub(crate) fn get_or_insert_node(&mut self, path: &str) -> SharedWallpaperNode {
-        self.nodes
-            .entry(String::from(path))
-            .or_insert_with(|| SharedWallpaperNode::new(path, DisplayMode::new(), 1, None))
-            .clone()
+    pub(crate) fn get_or_insert_node(&mut self, path: &Path) -> SharedWallpaperNode {
+        match self.nodes.get(path) {
+            Some(node) => node.clone(),
+            None => {
+                let node = SharedWallpaperNode::new(path, DisplayMode::new(), nzu16!(1), None);
+                self.nodes.insert(path.to_path_buf(), node.clone());
+                node
+            }
+        }
     }
 
-    pub(crate) fn update_node(&mut self, path: &str, settings: &Settings, period: ParsedTimePeriod) -> SharedWallpaperNode {
+    pub(crate) fn update_node(&mut self, path: &Path, settings: &Settings, period: ParsedTimePeriod) -> SharedWallpaperNode {
         let node = self.get_or_insert_node(path);
         settings.update_node(&mut node.borrow_mut());
 
@@ -109,6 +118,8 @@ impl State {
         node
     }
 
+    /// Ищет все актуальные `SharedWallpaperNode`. Актуальные - ознчает, что узел подходит по периоду времени.
+    /// Если ни один узел не подходит по периоду времени, то возвращается список всех `SharedWallpaperNode`.
     pub(crate) fn find_actual_nodes(&self) -> Vec<SharedWallpaperNode> {
         let now = Local::now().naive_local();
 
@@ -130,7 +141,7 @@ impl State {
         }
     }
 
-    pub(crate) fn find_closest_node(&self, path: &str) -> Option<SharedWallpaperNode> {
+    pub(crate) fn find_closest_node(&self, path: &Path) -> Option<SharedWallpaperNode> {
         self.nodes.values()
             .filter(|node| path.starts_with(node.borrow().path()))
             .max_by_key(|node| node.borrow().path().len())
@@ -139,21 +150,19 @@ impl State {
 
     // ---------------------------------------- Wallpapers ----------------------------------------
 
-    pub(crate) fn find_all_child_wallpapers<I, N>(&self, nodes: I) -> (IndexSet<Wallpaper>, Warning)
+    pub(crate) fn find_all_child_wallpapers<I, N>(&self, nodes: I, warning: &mut Warning) -> IndexSet<Wallpaper>
     where
         I: IntoIterator<Item = N>,
         N: AsRef<SharedWallpaperNode>,
     {
         let mut wallpapers = IndexSet::new();
-        let mut warning = Warning::new();
 
         for rc in nodes {
             let node = rc.as_ref().borrow();
-            let path = Path::new(node.path());
 
-            match fs::metadata(path) {
+            match fs::metadata(node.path()) {
                 Ok(metadata) => {
-                    self.add_all_child_wallpapers(&mut wallpapers, &mut warning, node, metadata)
+                    self.add_all_child_wallpapers(&mut wallpapers, warning, node, metadata)
                 }
                 Err(err) => {
                     warning.append_msg_error_path("couldn't get file metadata", &err, node.path())
@@ -161,34 +170,56 @@ impl State {
             }
         }
 
-        (wallpapers, warning)
+        wallpapers
     }
 
     fn add_all_child_wallpapers(&self, wallpapers: &mut IndexSet<Wallpaper>, warning: &mut Warning, current_node: Ref<WallpaperNode>, metadata: Metadata) {
-        let path = Path::new(current_node.path());
+        let current_path = current_node.path();
+        let matcher = self.config.media_type_matcher();
 
-        if metadata.is_file() && ext_matches(path) && check_accessible(path, warning) {
-            wallpapers.insert(Wallpaper::from(&*current_node));
+        if metadata.is_file()
+            && ext_matches(current_path)
+            && check_accessible(current_path, warning)
+        {
+            let media_type = service::get_media_type(current_path);
+
+            if media_type.as_ref().is_ok_and(|typ| matcher(*typ)) {
+                wallpapers.insert(Wallpaper::from(&*current_node));
+
+            } else {
+                let media_type_str = match media_type {
+                    Ok(MediaType::Image) => "image",
+                    Ok(MediaType::Video) => "video",
+                    Err(_) => "file with unknown type",
+                };
+
+                let _ = writeln!(warning,
+                    "Warning: couldn't find command for {}: '{}'",
+                    media_type_str, current_path.display()
+                );
+            }
+
             return;
         }
 
         if metadata.is_dir() {
-            let walk_dir = WalkDir::new(path)
+            let walk_dir = WalkDir::new(current_path)
                 .follow_links(true)
                 .same_file_system(false)
-                .max_depth(current_node.recursive_level as usize);
+                .max_depth(current_node.recursive_level.get() as usize);
 
             for entry in walk_dir {
                 match entry {
                     Ok(dir_entry) => {
+                        let path = dir_entry.path();
+                        
                         if dir_entry.file_type().is_file()
-                            && ext_matches(dir_entry.path())
-                            && check_accessible(dir_entry.path(), warning)
+                            && ext_matches(path)
+                            && check_accessible(path, warning)
+                            && service::get_media_type(path).is_ok_and(&matcher)
                         {
-                            let path = dir_entry.path().to_str().unwrap_or_default();
-
                             wallpapers.insert(Wallpaper::new(
-                                String::from(path),
+                                path,
                                 self.find_closest_node(path)
                                     .map(|node| node.borrow().mode.clone())
                                     .unwrap_or_else(|| current_node.mode.clone()),
@@ -215,7 +246,7 @@ impl State {
 
         self.current_wallpaper_path = result
             .as_ref().ok()
-            .map(|wallpaper| wallpaper.path().clone());
+            .map(|wallpaper| wallpaper.path().to_path_buf());
 
         result
     }
@@ -225,14 +256,13 @@ impl State {
     pub fn get_timeout(&self) -> PollTimeout {
         let now = Local::now().naive_local();
 
-        let time = self
-            .nodes
+        let time = self.nodes
             .values()
             .filter_map(|node| {
                 node.borrow().period
                     .as_ref()
                     .map(|period| period.since.clone())
-                    .filter(|time| *time > now)
+                    .filter(|since| *since > now)
             })
             .min();
 
@@ -273,17 +303,17 @@ impl State {
         }
 
         let mut paths = self.nodes.keys()
-                .map(|p| p.as_str())
-                .collect::<Vec<&str>>();
+                .map(|p| p.as_path())
+                .collect::<Vec<&Path>>();
         
         paths.sort();
 
-        let mut redudant: Vec<String> = Vec::new();
+        let mut redudant: Vec<PathBuf> = Vec::new();
         let mut base_path = paths[0];
 
         for &path in &paths[1..] {
             if self.is_redudant(path, base_path) {
-                redudant.push(String::from(path));
+                redudant.push(path.to_path_buf());
             } else {
                 base_path = path;
             }
@@ -294,8 +324,8 @@ impl State {
         }
     }
 
-    fn is_redudant(&self, child_path: &str, parent_path: &str) -> bool {
-        if !path_starts_with(child_path, parent_path) {
+    fn is_redudant(&self, child_path: &Path, parent_path: &Path) -> bool {
+        if !child_path.starts_with(parent_path) {
             return false;
         }
 
@@ -307,20 +337,12 @@ impl State {
             child.period.is_none()
         ) && (
             parent.recursive_level > child.recursive_level ||
-            parent.recursive_level > 0 && Path::new(child_path).is_file()
+            child_path.is_file()
         )
     }
 }
 
 // ---------------------------------------- Util functions ----------------------------------------
-
-fn path_starts_with(path: &str, prefix: &str) -> bool {
-    path.starts_with(prefix) && (
-        prefix.ends_with('/') ||
-        path.len() == prefix.len() || 
-        path.as_bytes()[prefix.len()] == b'/'
-    )
-}
 
 fn clear_period_if_expired(period: &mut Option<TimePeriod>, now: &NaiveDateTime) {
     if period.as_ref().is_some_and(|period| period.is_expired(now)) {
@@ -341,13 +363,13 @@ fn ext_matches(path: impl AsRef<Path>) -> bool {
 }
 
 fn check_accessible(path: impl AsRef<Path>, warning: &mut Warning) -> bool {
-    let path_ref = path.as_ref();
+    let path = path.as_ref();
 
-    match File::open(path_ref) {
+    match File::open(path) {
         Ok(_) => true,
 
         Err(err) => {
-            let path = path_ref.to_str().unwrap_or_default();
+            let path = path.to_str().unwrap_or_default();
             warning.append_msg_error_path("couldn't open file", &err, path);
             false
         }

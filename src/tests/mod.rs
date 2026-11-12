@@ -16,4 +16,5 @@ mod time_parser_tests;
 #[cfg(test)]
 mod util_tests;
 
+#[cfg(test)]
 mod util;

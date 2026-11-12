@@ -1,4 +1,6 @@
 use std::error::Error;
+use std::num::NonZeroU16;
+use std::path::PathBuf;
 use std::{env, fs};
 
 use chrono::{Days, Local, NaiveDate, Timelike};
@@ -8,10 +10,11 @@ use clap::error::ErrorKind;
 use crate::cli::{ActionSubcommand, Cli, ParsedTimePeriod, Settings};
 use crate::assert_is_err;
 use crate::state::{Alignment, DisplayMode, FitMode, TimePeriod};
+use crate::tests::util;
 
-macro_rules! vec_strings {
+macro_rules! vec_paths {
     ($($item:expr),* $(,)?) => {
-        vec![$(String::from($item)),*]
+        vec![$(PathBuf::from($item)),*]
     };
 }
 
@@ -32,32 +35,34 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "list"]).subcommand(),
+        Cli::parse_from([CMD, "list"]).subcommand,
         ActionSubcommand::GetNodeList
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "get"]).subcommand(),
+        Cli::parse_from([CMD, "get"]).subcommand,
         ActionSubcommand::GetCurrentWallpaper
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "random"]).subcommand(),
+        Cli::parse_from([CMD, "random"]).subcommand,
         ActionSubcommand::SetRandowWallpaper
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "group-list"]).subcommand(),
+        Cli::parse_from([CMD, "group-list"]).subcommand,
         ActionSubcommand::GetGroupList
     );
 
+    let path = util::TEST_DIR.join("a");
+
     assert_eq!(
-        *Cli::parse_from([CMD, "set", "--mode", "stretch top contain right", "-r", "3", "/tmp/ywpm-test/a"]).subcommand(),
+        Cli::parse_from([CMD, "set", "--mode", "stretch top contain right", "-r", "3", &path.to_string_lossy()]).subcommand,
 
         ActionSubcommand::SetWallpaper {
-            path: String::from("/tmp/ywpm-test/a"),
+            path: path,
             settings: Settings {
-                recursive_level: Some(3),
+                recursive_level: NonZeroU16::new(3),
                 mode: Some(DisplayMode {
                     fit_mode:  FitMode::Contain,
                     alignment: Alignment::Right,
@@ -68,10 +73,10 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "add", "-m", "top", "./b/c"]).subcommand(),
+        Cli::parse_from([CMD, "add", "-m", "top", "./b/c"]).subcommand,
 
         ActionSubcommand::AddNodes {
-            paths: vec_strings!["./b/c"],
+            paths: vec_paths!["./b/c"],
             settings: Settings {
                 recursive_level: None,
                 mode: Some(DisplayMode {
@@ -84,24 +89,24 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "remove", "/tmp", "./b/c", "../x/y/z"]).subcommand(),
+        Cli::parse_from([CMD, "remove", "/tmp", "./b/c", "../x/y/z"]).subcommand,
         
         ActionSubcommand::RemoveNodes {
-            paths: vec_strings!["/tmp", "./b/c", "../x/y/z"]
+            paths: vec_paths!["/tmp", "./b/c", "../x/y/z"]
         }
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "new-group", "chebureki", "/tmp", "../x/y/z"]).subcommand(),
+        Cli::parse_from([CMD, "new-group", "chebureki", "/tmp", "../x/y/z"]).subcommand,
 
         ActionSubcommand::NewGroup {
             name: String::from("chebureki"),
-            paths: vec_strings!["/tmp", "../x/y/z"],
+            paths: vec_paths!["/tmp", "../x/y/z"],
         }
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "get-group", "chebureki"]).subcommand(),
+        Cli::parse_from([CMD, "get-group", "chebureki"]).subcommand,
         
         ActionSubcommand::GetGroup {
             name: String::from("chebureki")
@@ -113,13 +118,13 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
         .with_nanosecond(0).unwrap();
 
     assert_eq!(
-        *Cli::parse_from([CMD, "set-group", "-s=now", "-u=tomorrow", "-r=10", "chebureki"]).subcommand(),
+        Cli::parse_from([CMD, "set-group", "-s=now", "-u=tomorrow", "-r=10", "chebureki"]).subcommand,
 
         ActionSubcommand::SetGroup {
             name: String::from("chebureki"),
             settings: Settings {
                 mode: None,
-                recursive_level: Some(10)
+                recursive_level: NonZeroU16::new(10)
             },
             period: ParsedTimePeriod::Set(TimePeriod {
                 since: now,
@@ -129,13 +134,13 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "set-group", "-s", "3500-08-08 20:05", "-d=10h", "-r", "65535", "chebureki"]).subcommand(),
+        Cli::parse_from([CMD, "set-group", "-s", "3500-08-08 20:05", "-d=10h", "-r", "65535", "chebureki"]).subcommand,
 
         ActionSubcommand::SetGroup {
             name: String::from("chebureki"),
             settings: Settings {
                 mode: None,
-                recursive_level: Some(65535)
+                recursive_level: NonZeroU16::new(65535)
             },
             period: ParsedTimePeriod::Set(TimePeriod {
                 since: NaiveDate::from_ymd_opt(3500, 8, 8).unwrap()
@@ -148,31 +153,31 @@ fn parse_args_correctly() -> Result<(), Box<dyn Error>> {
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "add-to-group", "chebureki", "../x/y/z", "."]).subcommand(),
+        Cli::parse_from([CMD, "add-to-group", "chebureki", "../x/y/z", "."]).subcommand,
         ActionSubcommand::AddToGroup {
             name: String::from("chebureki"),
-            paths: vec_strings!["../x/y/z", "."],
+            paths: vec_paths!["../x/y/z", "."],
         }
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "remove-from-group", "chebureki", "../x/y/z", ".", "--", "-x"]).subcommand(),
+        Cli::parse_from([CMD, "remove-from-group", "chebureki", "../x/y/z", ".", "--", "-x"]).subcommand,
 
         ActionSubcommand::RemoveFromGroup {
             name: String::from("chebureki"),
-            paths: vec_strings!["../x/y/z", ".", "-x"],
+            paths: vec_paths!["../x/y/z", ".", "-x"],
         }
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "clear-group", "chebureki"]).subcommand(),
+        Cli::parse_from([CMD, "clear-group", "chebureki"]).subcommand,
         ActionSubcommand::ClearGroup {
             name: String::from("chebureki")
         }
     );
 
     assert_eq!(
-        *Cli::parse_from([CMD, "remove-group", "chebureki"]).subcommand(),
+        Cli::parse_from([CMD, "remove-group", "chebureki"]).subcommand,
         ActionSubcommand::RemoveGroup {
             name: String::from("chebureki")
         }
@@ -198,8 +203,9 @@ fn parse_args_errors() {
 }
 
 fn setup_dirs() {
-    fs::create_dir_all("/tmp/ywpm-test/a/b/c").unwrap();
-    fs::create_dir_all("/tmp/ywpm-test/x/y/z").unwrap();
-    fs::create_dir_all("/tmp/ywpm-test/a/-x").unwrap();
-    env::set_current_dir("/tmp/ywpm-test/a").unwrap();
+    let test_dir = *util::TEST_DIR;
+    fs::create_dir_all(test_dir.join("a/b/c")).unwrap();
+    fs::create_dir_all(test_dir.join("x/y/z")).unwrap();
+    fs::create_dir_all(test_dir.join("a/-x")).unwrap();
+    env::set_current_dir(test_dir.join("a")).unwrap();
 }

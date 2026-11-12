@@ -1,10 +1,11 @@
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use itertools::Itertools;
 
 use crate::{action_perform_error_localized, format_localized};
 use crate::cli::{ParsedTimePeriod, Settings};
-use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
+use crate::core::{ActionPerformError, ActionResult, ActionSuccess, Warning};
 use crate::state::{SharedWallpaperNode, State, TimePeriod, WallpaperGroup};
 
 pub fn get_list(state: &State) -> String {
@@ -35,7 +36,7 @@ pub fn get_info(state: &State, name: &str) -> ActionResult {
     }
 }
 
-pub fn new(state: &mut State, name: impl Into<String>, paths: &Vec<String>) -> Result<(), ActionPerformError> {
+pub fn new(state: &mut State, name: impl Into<String>, paths: &[PathBuf]) -> Result<(), ActionPerformError> {
     let group_nodes = paths.iter()
         .map(|path| state.get_or_insert_node(path))
         .collect::<HashSet<SharedWallpaperNode>>();
@@ -48,7 +49,7 @@ pub fn new(state: &mut State, name: impl Into<String>, paths: &Vec<String>) -> R
     Ok(())
 }
 
-pub fn set(state: &mut State, name: &str, settings: &Settings, period: ParsedTimePeriod) -> ActionResult {
+pub fn set(state: &mut State, name: &str, settings: &Settings, period: ParsedTimePeriod, warning: &mut Warning) -> ActionResult {
     let group = get_group_mut(state, name)?;
 
     if settings.is_some() {
@@ -66,14 +67,14 @@ pub fn set(state: &mut State, name: &str, settings: &Settings, period: ParsedTim
     let group = state.groups.get(name).unwrap();
 
     if TimePeriod::is_none_or_now(&group.period) {
-        let (wallpapers, warning) = state.find_all_child_wallpapers(group.nodes());
+        let wallpapers = state.find_all_child_wallpapers(group.nodes(), warning);
         let wallpaper = state.run_backend_with_random_wallpaper(&wallpapers)?;
 
         Ok(format_localized!(
-            "{}Wallpaper group set: '{}'",
-            "{}Установлена группа: '{}'",
+            "{}Wallpaper set: '{}'",
+            "{}Установлены обои: '{}'",
             warning,
-            wallpaper.path()
+            wallpaper.path().display()
         ).into())
 
     } else if let ParsedTimePeriod::Set(period) = period {
@@ -91,11 +92,11 @@ pub fn remove(state: &mut State, name: &str) {
     state.groups.remove(name);
 }
 
-pub fn add_to_group(state: &mut State, name: impl Into<String>, paths: &Vec<String>) -> Result<(), ActionPerformError> {
+pub fn add_to_group(state: &mut State, name: impl Into<String>, paths: &[PathBuf]) -> Result<(), ActionPerformError> {
     new(state, name, paths)
 }
 
-pub fn remove_from_group(state: &mut State, name: &str, paths: &Vec<String>) -> Result<(), ActionPerformError> {
+pub fn remove_from_group(state: &mut State, name: &str, paths: &[PathBuf]) -> Result<(), ActionPerformError> {
     let group = get_group_mut(state, name)?;
 
     for path in paths {

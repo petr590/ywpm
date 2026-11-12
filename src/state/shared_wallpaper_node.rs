@@ -1,5 +1,7 @@
 use std::cell::{Ref, RefCell, RefMut};
 use std::hash::{Hash, Hasher};
+use std::num::NonZeroU16;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
@@ -35,7 +37,7 @@ impl From<WallpaperNode> for SharedWallpaperNode {
 }
 
 impl SharedWallpaperNode {
-    pub fn new(path: impl Into<String>, mode: DisplayMode, recursive_level: u16, period: Option<TimePeriod>) -> Self {
+    pub fn new(path: impl Into<PathBuf>, mode: DisplayMode, recursive_level: NonZeroU16, period: Option<TimePeriod>) -> Self {
         Self::from(WallpaperNode::new(path, mode, recursive_level, period))
     }
 

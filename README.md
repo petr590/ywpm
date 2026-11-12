@@ -1,21 +1,21 @@
 # YWpM - YoRHa Wallpaper Manager
-YoRHa Wallpaper Manager is a modern, user‑friendly console tool that helps you manage all your wallpapers on Linux. Please note that YWpM only determines when and which wallpapers to render, and does not render wallpapers on its own. Instead, YWpM uses a backend. Currently, only mpvpaper is supported as a backend.
+YoRHa Wallpaper Manager is a modern, user‑friendly console tool that helps you manage all your wallpapers on Linux. Please note that YWpM only determines when and which wallpapers to render, and does not render wallpapers on its own. Instead, YWpM uses a backend. Currently, only mpvpaper and KDE Plasma are supported as a backend.
 
-## Build
+## Quick start
 
 ### 1. Dependencies
 * cargo
-* mpvpaper
+* backend - mpvpaper or KDE Plasma (plasma-apply-wallpaperimage), other backends are planned
 
 ### 2. Compiling and building the package
-#### 2.1. Building a DEB package:
+#### Building a DEB package:
 ``` bash
 cargo install cargo-deb
 cargo deb
 sudo apt-get install ./target/debian/*.deb
 ```
 
-#### 2.2. Building an RPM package:
+#### Building an RPM package:
 ``` bash
 cargo install cargo-generate-rpm
 cargo generate-rpm
@@ -31,12 +31,22 @@ Installation for **Alt Linux**:
 sudo apt-get install ./target/generate-rpm/*.rpm
 ```
 
-#### 2.3. Compilation without package building
+#### Compilation without package building
 ``` bash
 cargo build --release
 ```
 
-### 3. Service startup
+### 3. Config
+The global config is located at the path `/etc/ywpm/config.yaml`. A local config can be created using the path `~/.config/ywpm/config.yaml`:
+``` bash
+cp /etc/ywpm/config.yaml ~/.config/ywpm/config.yaml
+```
+
+The most important parameter is `command`. You need to write a suitable script for rendering wallpaper there (in the future, a script for auto-detection is also planned, but for now, everything is done with hands). The default scripts are in the folder `/usr/share/ywpm/scripts`. It is recommended to place your own scripts in the folder `~/.local/share/ywpm/scripts`. You can write them by analogy with default scripts - take a look at `set-wallpaper-mpvpaper.sh`.
+
+If the script supports only images, then it must be specified in the `images-command` parameter. If only video - in the `video-command` parameter. If both - `command`. The script must be run via `exec` in order for the child process to terminate normally.
+
+### 4. Service startup
 The service does not start automatically (due to systemd specifics). After installation, you need to run:
 ``` bash
 systemctl --user daemon-reload

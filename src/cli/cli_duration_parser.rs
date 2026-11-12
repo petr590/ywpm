@@ -1,4 +1,5 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
+
 use regex::Regex;
 
 use crate::arg_parse_error_localized;
@@ -6,9 +7,9 @@ use crate::cli::CliDuration;
 use crate::cli::error::ArgParseError;
 
 
-static ZERO_REGEX:         Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^0+$").unwrap());
-static NUM_AND_UNIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^(\d+)\s*(\w+)$").unwrap());
-static TIME_REGEX:         Lazy<Regex> = Lazy::new(|| Regex::new(r"(?-u)^(\d+):(\d{1,2})$").unwrap());
+static ZERO_REGEX:         LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?-u)^0+$").unwrap());
+static NUM_AND_UNIT_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?-u)^(\d+)\s*(\w+)$").unwrap());
+static TIME_REGEX:         LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?-u)^(\d+):(\d{1,2})$").unwrap());
 
 
 pub(crate) fn parse_duration(input: &str) -> Result<CliDuration, ArgParseError> {

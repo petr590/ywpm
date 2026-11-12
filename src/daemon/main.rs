@@ -9,40 +9,42 @@ use std::error::Error;
 use std::io::{self, BufReader, BufWriter};
 use std::os::fd::AsFd;
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 
 use ywpm::cli::Cli;
 use ywpm::config::Config;
-use ywpm::core::ActionPerformError;
+use ywpm::core::{ActionPerformError, Warning};
 use ywpm::daemon::{backend, service};
 use ywpm::daemon::service::{state_io, wallpaper};
 use ywpm::state::State;
 use ywpm::util::{self, ReadWriteError};
 
 fn main() -> Result<(), Box<dyn Error>> {
-	let config = Config::read_first_existing(&util::get_config_paths())?;
+    let paths = util::get_config_paths();
+	let (config, path) = Config::read_first_existing(&paths)?;
 
-	println!("State path: {}", config.state_path());
+    println!("Config path: {}", path.display());
+	println!("State path: {}", config.state_path().display());
 
     let mut state = state_io::read_or_create_empty(config)?;
 
-    let socket = if env::args().count() > 1 {
+    let socket_path = if env::args().count() > 1 {
         perform_initial_action_or_exit(&mut state)
     } else {
         None
     };
 
-    let socket = socket.unwrap_or_else(util::get_socket_path);
+    let socket_path = socket_path.unwrap_or_else(util::get_socket_path);
 
-    main_loop(state, socket)
+    main_loop(state, socket_path)
 }
 
 
-fn perform_initial_action_or_exit(state: &mut State) -> Option<String> {
+fn perform_initial_action_or_exit(state: &mut State) -> Option<PathBuf> {
 
     match perform_initial_action(state) {
-        Ok(socket) => socket,
+        Ok(socket_path) => socket_path,
 
         Err(err) => {
             eprintln!("{}", err.to_string());
@@ -51,17 +53,15 @@ fn perform_initial_action_or_exit(state: &mut State) -> Option<String> {
     }
 }
 
-fn perform_initial_action(state: &mut State) -> Result<Option<String>, Box<dyn Error>> {
+fn perform_initial_action(state: &mut State) -> Result<Option<PathBuf>, Box<dyn Error>> {
     let mut cli = Cli::parse();
+    cli.canonicalize_paths(env::current_dir()?)?;
 
-    cli.canonicalize_paths(
-        env::current_dir()?
-            .to_str().unwrap_or_default()
-    )?;
+    let mut warning = Warning::new();
+    service::perform_action_and_update_config(cli.subcommand, state, cli.is_verbose, util::get_terminal_width(), &mut warning)?;
 
-    let socket_path = cli.socket_path().clone();
-    service::perform_action_and_update_config(cli, state, util::get_terminal_width())?;
-    Ok(socket_path)
+    eprint!("{warning}");
+    Ok(cli.socket_path)
 }
 
 
@@ -90,7 +90,10 @@ fn main_loop(mut state: State, socket_path: impl AsRef<Path>) -> Result<(), Box<
         match poll::poll(&mut poll_fds, state.get_timeout()) {
             Ok(0) => {
                 println!("\nTimeout reached! Updating wallpaper...");
-                wallpaper::set_random(&mut state)?;
+
+                let mut warning = Warning::new();
+                wallpaper::set_random(&mut state, &mut warning)?;
+                eprint!("{warning}");
             }
 
             Ok(_) => {
@@ -161,13 +164,17 @@ fn handle_client(mut stream: UnixStream, state: &mut State) -> Result<(), ReadWr
 
     match Cli::try_parse_from(&args) {
         Ok(mut cli) => {
-            if cli.subcommand().changes_state() {
+            if cli.subcommand.changes_state() {
                 println!("Command: {}", args.join(" "))
             }
 
+            let mut warning = Warning::new();
+
             let result = cli.canonicalize_paths(&cwd)
                 .map_err(|err| ActionPerformError::new(err.message()))
-                .and_then(|()| service::perform_action_and_update_config(cli, state, term_width));
+                .and_then(|()| service::perform_action_and_update_config(cli.subcommand, state, cli.is_verbose, term_width, &mut warning));
+
+            util::write_string(&mut writer, warning.message())?;
 
             match result {
                 Ok(success) => util::write_ok(&mut writer, success)?,

@@ -1,6 +1,6 @@
-use std::collections::HashSet;
+use std::borrow::Cow;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use clap::{Subcommand, ValueHint};
 use indoc::indoc;
@@ -8,7 +8,7 @@ use path_absolutize::Absolutize;
 
 use crate::cli::action_subcommand::ActionSubcommand::*;
 use crate::cli::{ArgParseError, ParsedTimePeriod, Settings};
-use crate::{arg_parse_error_localized, localized, util};
+use crate::{arg_parse_error_localized, localized};
 
 macro_rules! GROUP_NAME {
     () => {
@@ -64,7 +64,7 @@ pub enum ActionSubcommand {
                 "Путь к файлу/папке"
             )
         )]
-        path: String,
+        path: PathBuf,
 
         #[command(flatten)] settings: Settings,
         #[command(flatten)] period: ParsedTimePeriod,
@@ -124,7 +124,7 @@ pub enum ActionSubcommand {
             value_hint = ValueHint::AnyPath,
             help = MANDATORY_PATHS!()
         )]
-        paths: Vec<String>,
+        paths: Vec<PathBuf>,
 
         #[command(flatten)] settings: Settings,
         #[command(flatten)] period: ParsedTimePeriod,
@@ -143,7 +143,7 @@ pub enum ActionSubcommand {
             value_hint = ValueHint::AnyPath,
             help = OPTIONAL_PATHS!()
         )]
-        paths: Vec<String>,
+        paths: Vec<PathBuf>,
 
         #[command(flatten)] settings: Settings,
         #[command(flatten)] period: ParsedTimePeriod,
@@ -163,7 +163,7 @@ pub enum ActionSubcommand {
             value_hint = ValueHint::AnyPath,
             help = MANDATORY_PATHS!()
         )]
-        paths: Vec<String>,
+        paths: Vec<PathBuf>,
     },
 
 
@@ -209,7 +209,7 @@ pub enum ActionSubcommand {
             value_hint = ValueHint::AnyPath,
             help = OPTIONAL_PATHS!()
         )]
-        paths: Vec<String>,
+        paths: Vec<PathBuf>,
     },
 
 
@@ -239,7 +239,7 @@ pub enum ActionSubcommand {
             value_hint = ValueHint::AnyPath,
             help = MANDATORY_PATHS!()
         )]
-        paths: Vec<String>,
+        paths: Vec<PathBuf>,
     },
 
 
@@ -256,7 +256,7 @@ pub enum ActionSubcommand {
             value_hint = ValueHint::AnyPath,
             help = MANDATORY_PATHS!()
         )]
-        paths: Vec<String>,
+        paths: Vec<PathBuf>,
     },
 
 
@@ -305,9 +305,9 @@ pub enum ActionSubcommand {
             help = localized!(
                 "A list of paths for searching. If not specified, list of paths from DB is used",
                 "Список путей для поиска. Если не задано, используется список путей из БД"
-            )
+            ),
         )]
-        paths: Vec<String>,
+        paths: Vec<PathBuf>,
 
         #[arg(
             long,
@@ -322,10 +322,14 @@ pub enum ActionSubcommand {
 
 impl ActionSubcommand {
 
-    pub(super) fn canonicalize_paths(&mut self, cwd: &str) -> Result<(), ArgParseError> {
+    pub(super) fn canonicalize_paths(&mut self, cwd: impl AsRef<Path>) -> Result<(), ArgParseError> {
+        let cwd = cwd.as_ref();
+
         match self {
             SetWallpaper { path, .. } => {
-                *path = canonicalize_path_and_check_exists(cwd, path)?;
+                if let Cow::Owned(new_path) = canonicalize_path_and_check_exists(cwd, path)? {
+                    *path = new_path;
+                }
             }
 
             AddNodes                 { paths, .. } |
@@ -333,21 +337,29 @@ impl ActionSubcommand {
             AddToGroup               { paths, .. } |
             FindNonFittingWallpapers { paths, .. } => {
 
-                let path_set = paths.iter()
-                    .map(|path| canonicalize_path_and_check_exists(cwd, path))
-                    .collect::<Result<HashSet<String>, ArgParseError>>()?;
+                for path in paths.iter_mut() {
+                    if let Cow::Owned(new_path) = canonicalize_path_and_check_exists(cwd, path)? {
+                        *path = new_path;
+                    }
+                }
 
-                *paths = path_set.into_iter().collect();
+                // Быстрее промежуточного HashSet на малых данных
+                paths.sort();
+                paths.dedup();
             }
 
             RemoveNodes     { paths, .. } |
             RemoveFromGroup { paths, .. } => {
 
-                let path_set = paths.iter()
-                    .map(|path| util::canonicalize_path(cwd, path))
-                    .collect::<HashSet<String>>();
+                for path in paths.iter_mut() {
+                    if let Cow::Owned(new_path) = path.absolutize_from(cwd) {
+                        *path = new_path;
+                    }
+                }
 
-                *paths = path_set.into_iter().collect();
+                // Быстрее промежуточного HashSet на малых данных
+                paths.sort();
+                paths.dedup();
             }
 
             _ => {}
@@ -377,14 +389,14 @@ impl ActionSubcommand {
     }
 }
 
-fn canonicalize_path_and_check_exists(cwd: &str, path: &str) -> Result<String, ArgParseError> {
-    let abs_path = Path::new(path).absolutize_from(cwd);
+fn canonicalize_path_and_check_exists<'a>(cwd: impl AsRef<Path>, path: &'a Path) -> Result<Cow<'a, Path>, ArgParseError> {
+    let abs_path = path.absolutize_from(cwd);
 
     let metadata = fs::metadata(abs_path.as_ref())
             .map_err(|err| ArgParseError::new(err.to_string()))?;
 
     if metadata.is_file() || metadata.is_dir() {
-        Ok(abs_path.to_string_lossy().into_owned())
+        Ok(abs_path)
     } else {
         Err(arg_parse_error_localized!(
             "No such file or directory: '{}'",

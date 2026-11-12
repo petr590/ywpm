@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use clap::{ArgAction, Parser, ValueHint};
 use indoc::indoc;
 
@@ -41,7 +43,7 @@ pub struct Cli {
             "Показать эту справку"
         )
     )]
-    help: Option<bool>,
+    pub help: Option<bool>,
 
     #[arg(
         short = 'y',
@@ -51,16 +53,18 @@ pub struct Cli {
             "Не спрашивать подтверждение перед удалением обоев/групп из конфига"
         )
     )]
-    skip_confirmation: bool,
+    pub skip_confirmation: bool,
 
     #[arg(
-        short, long, global = true,
+        short = 'v',
+        long = "verbose",
+        global = true,
         help = localized!(
             "Verbose output (for 'get' and 'find-non-fitting')",
             "Подробный вывод (для get и find-non-fitting)"
         )
     )]
-    verbose: bool,
+    pub is_verbose: bool,
 
     #[arg(
         long = "socket",
@@ -71,35 +75,14 @@ pub struct Cli {
             "Сокет для подключения к серверу"
         )
     )]
-    socket_path: Option<String>,
+    pub socket_path: Option<PathBuf>,
 
     #[command(subcommand)]
-    subcommand: ActionSubcommand,
+    pub subcommand: ActionSubcommand,
 }
 
 impl Cli {
-
-    pub fn skip_confirmation(&self) -> bool {
-        self.skip_confirmation
-    }
-
-    pub fn is_verbose(&self) -> bool {
-        self.verbose
-    }
-
-    pub fn subcommand(&self) -> &ActionSubcommand {
-        &self.subcommand
-    }
-
-    pub fn subcommand_move(self) -> ActionSubcommand {
-        self.subcommand
-    }
-
-    pub fn socket_path(&self) -> &Option<String> {
-        &self.socket_path
-    }
-
-    pub fn canonicalize_paths(&mut self, cwd: &str) -> Result<(), ArgParseError> {
+    pub fn canonicalize_paths(&mut self, cwd: impl AsRef<Path>) -> Result<(), ArgParseError> {
         self.subcommand.canonicalize_paths(cwd)
     }
 }

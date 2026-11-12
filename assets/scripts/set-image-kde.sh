@@ -15,7 +15,7 @@ fi
 
 # Конвертируем картинку, так как KDE не умеет делать это сам
 target_path="$(
-    "$HOME/.config/ywpm/scripts/convert-image.sh" \
+    "$(dirname "$0")/convert-image.sh" \
         "$file_path" "$fit_mode" "$alignment" "$image_size" "$screen_size"
 )"
 

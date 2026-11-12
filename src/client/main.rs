@@ -17,16 +17,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cli = Cli::parse();
 
-    let socket_path = cli.socket_path()
-            .clone()
+    let socket_path = cli.socket_path
             .unwrap_or_else(util::get_socket_path);
-
 
     let mut stream = connect_to_socket(socket_path)?;
 
-    let confirmed = cli.skip_confirmation() ||
+    let confirmed = cli.skip_confirmation ||
             !io::stdin().is_terminal() ||
-            confirm_removing_and_clearing(cli.subcommand());
+            confirm_removing_and_clearing(&cli.subcommand);
 
     if confirmed {
         write_args(&mut stream)?;
@@ -121,7 +119,12 @@ fn write_args(stream: &mut UnixStream) -> Result<(), Box<dyn Error>> {
 }
 
 fn read_response(stream: &mut UnixStream) -> ReadWriteResult<()> {
-    let action_result = util::read_response(&mut BufReader::new(stream))?;
+    let mut stream = BufReader::new(stream);
+
+    let warning = util::read_string(&mut stream)?;
+    eprint!("{warning}");
+
+    let action_result = util::read_response(&mut stream)?;
 
     match action_result {
         Ok(success) => {

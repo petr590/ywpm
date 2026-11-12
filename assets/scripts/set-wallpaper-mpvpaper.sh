@@ -31,7 +31,7 @@ case "$alignment" in
     *)      align_y=0 ;;
 esac
 
-echo mpvpaper -o "
+exec mpvpaper -o "
     --loop=inf --image-display-duration=inf --ao=null
     --vo=gpu --hwdec=auto --video-sync=display-resample
     --scale=$scale --cscale=$scale --dscale=$scale

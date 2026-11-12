@@ -1,4 +1,5 @@
 mod fs_util;
+mod macros;
 mod read_write_error;
 mod reader;
 mod writer;

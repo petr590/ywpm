@@ -1,7 +1,6 @@
 use std::io::Read;
 
 use crate::core::{ActionPerformError, ActionResult, ActionSuccess};
-use crate::core::Warning;
 use crate::util::ReadWriteResult;
 use crate::util::read_write_error::ReadWriteError;
 
@@ -37,7 +36,6 @@ pub fn read_response(reader: &mut impl Read) -> ReadWriteResult<ActionResult> {
     match enum_tag {
         0 => Ok(ActionResult::Ok(ActionSuccess {
             message: read_string(reader)?,
-            warning: Warning::from(read_string(reader)?),
         })),
 
         1 => Ok(ActionResult::Err(ActionPerformError::new(read_string(reader)?))),

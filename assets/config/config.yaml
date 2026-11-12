@@ -1,3 +1,3 @@
 state-path: ~/.local/share/ywpm/state.yaml
 # TODO: auto recognize script
-#images-command: /usr/share/ywpm/scripts/set-wallpaper-kde.sh "$FILE_PATH" "$MEDIA_TYPE" "$FIT_MODE" "$ALIGNMENT" "$IMAGE_WIDTH" "$IMAGE_HEIGHT" "$SCREEN_WIDTH" "$SCREEN_HEIGHT"
+images-command: exec /usr/share/ywpm/scripts/set-wallpaper-mpvpaper.sh "$FILE_PATH" "$MEDIA_TYPE" "$FIT_MODE" "$ALIGNMENT" #"$IMAGE_WIDTH" "$IMAGE_HEIGHT" "$SCREEN_WIDTH" "$SCREEN_HEIGHT"

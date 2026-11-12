@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::path::PathBuf;
 
 use comfy_table::{ContentArrangement, Table, presets};
 use display_info::DisplayInfo;
@@ -14,20 +15,18 @@ use crate::state::{SharedWallpaperNode, State, Wallpaper};
 
 
 struct Row {
-    path: String,
+    path: PathBuf,
     resolution: Resolution,
     diff_percent: u64,
     is_wider: bool,
 }
 
 
-pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Option<u32>, is_verbose: bool, term_width: u16) -> ActionResult {
+pub fn find_non_fitting(state: &mut State, paths: Vec<PathBuf>, display_id: Option<u32>, is_verbose: bool, term_width: u16, warning: &mut Warning) -> ActionResult {
     let display_res = get_display_resolution(display_id)?;
 
-    let (wallpapers, mut warning) = find_wallpapers_from_paths(state, paths);
-    let (info_map, warning2)      = MediaInfo::get_for_all(wallpapers);
-
-    warning.append(warning2.message());
+    let wallpapers = find_wallpapers_from_paths(state, paths, warning);
+    let info_map = MediaInfo::get_for_all(wallpapers, warning);
 
 
     let mut message = String::new();
@@ -62,14 +61,12 @@ pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Optio
             ));
         
 
-        let home = util::get_home_with_slash();
-
         for Row { path, resolution, diff_percent, is_wider } in non_fitting {
             table.add_row([
                 resolution.to_string(),
                 resolution.ratio_str(),
                 diff_to_str(diff_percent, is_wider),
-                util::replace_home_with_tilde(&home, &path)
+                util::replace_home_with_tilde(path)
             ]);
         }
 
@@ -79,16 +76,16 @@ pub fn find_non_fitting(state: &mut State, paths: Vec<String>, display_id: Optio
     } else {
         find_non_fitting_of(&display_res, info_map,
             |path, _| {
-                let _ = writeln!(message, "{path}");
+                let _ = writeln!(message, "{}", path.display());
             }
         );
     }
     
-    Ok(ActionSuccess { message, warning })
+    Ok(ActionSuccess::with_message(message))
 }
 
 
-fn find_non_fitting_of(display_res: &Resolution, info_map: HashMap<String, MediaInfo>, mut consumer: impl FnMut(String, MediaInfo)) {
+fn find_non_fitting_of(display_res: &Resolution, info_map: HashMap<PathBuf, MediaInfo>, mut consumer: impl FnMut(PathBuf, MediaInfo)) {
 
     for (path, info) in info_map {
         match info.media_type {
@@ -168,14 +165,14 @@ pub(crate) fn get_display_resolution(display_id: Option<u32>) -> Result<Resoluti
     }
 }
 
-fn find_wallpapers_from_paths(state: &mut State, paths: Vec<String>) -> (IndexSet<Wallpaper>, Warning) {
+fn find_wallpapers_from_paths(state: &mut State, paths: Vec<PathBuf>, warning: &mut Warning) -> IndexSet<Wallpaper> {
     if paths.is_empty() {
-        state.find_all_child_wallpapers(state.nodes.values())
+        state.find_all_child_wallpapers(state.nodes.values(), warning)
     } else {
         let nodes = paths.iter()
             .map(|path| state.get_or_insert_node(path))
             .collect::<Vec<SharedWallpaperNode>>();
 
-        state.find_all_child_wallpapers(nodes)
+        state.find_all_child_wallpapers(nodes, warning)
     }
 }

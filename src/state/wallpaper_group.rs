@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 use crate::state::dtos::WallpaperGroupDto;
 use crate::state::{SharedWallpaperNode, TimePeriod};
@@ -17,7 +18,7 @@ impl WallpaperGroup {
         }
     }
 
-    pub fn from_dto(dto: WallpaperGroupDto, wallpapers: &HashMap<String, SharedWallpaperNode>) -> Self {
+    pub fn from_dto(dto: WallpaperGroupDto, wallpapers: &HashMap<PathBuf, SharedWallpaperNode>) -> Self {
         Self {
             nodes: dto.nodes.iter()
                 .map(|path| wallpapers.get(path).cloned())
@@ -45,14 +46,14 @@ impl WallpaperGroup {
     pub fn as_dto(&self) -> WallpaperGroupDto {
         WallpaperGroupDto {
             nodes: self.nodes.iter()
-                .map(|node| node.borrow().path().to_string())
+                .map(|node| node.borrow().path().to_path_buf())
                 .collect(),
 
             period: self.period.clone(),
         }
     }
 
-    pub fn remove(&mut self, path: &str) {
+    pub fn remove(&mut self, path: &Path) {
         self.nodes.retain(|node| node.borrow().path() == path);
     }
 

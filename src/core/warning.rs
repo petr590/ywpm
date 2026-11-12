@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fmt::{self, Write};
+use std::path::Path;
 
 pub struct Warning {
     message: String,
@@ -8,6 +9,20 @@ pub struct Warning {
 impl fmt::Display for Warning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.message.fmt(f)
+    }
+}
+
+impl fmt::Write for Warning {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.message.write_str(s)
+    }
+
+    fn write_char(&mut self, c: char) -> fmt::Result {
+        self.message.write_char(c)
+    }
+
+    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
+        self.message.write_fmt(args)
     }
 }
 
@@ -24,13 +39,13 @@ impl Warning {
         }
     }
 
-    pub fn with_msg_path(message: &str, path: &str) -> Self {
+    pub fn with_msg_path(message: &str, path: impl AsRef<Path>) -> Self {
         let mut warning = Self::new();
         warning.append_msg_path(message, path);
         warning
     }
 
-    pub fn with_msg_error_path(message: &str, err: &dyn Error, path: &str) -> Self {
+    pub fn with_msg_error_path(message: &str, err: &dyn Error, path: impl AsRef<Path>) -> Self {
         let mut warning = Self::new();
         warning.append_msg_error_path(message, err, path);
         warning
@@ -44,12 +59,12 @@ impl Warning {
         let _ = write!(self.message, "{message}");
     }
 
-    pub fn append_msg_error_path(&mut self, message: &str, err: &dyn Error, path: &str) {
-        let _ = writeln!(self.message, "Warning: {message}: {err}: '{path}'");
+    pub fn append_msg_error_path(&mut self, message: &str, err: &dyn Error, path: impl AsRef<Path>) {
+        let _ = writeln!(self.message, "Warning: {}: {}: '{}'", message, err, path.as_ref().display());
     }
 
-    pub fn append_msg_path(&mut self, message: &str, path: &str) {
-        let _ = writeln!(self.message, "Warning: {message}: '{path}'");
+    pub fn append_msg_path(&mut self, message: &str, path: impl AsRef<Path>) {
+        let _ = writeln!(self.message, "Warning: {}: '{}'", message, path.as_ref().display());
     }
 
     pub fn append_msg_error(&mut self, message: &str, err: &dyn Error) {

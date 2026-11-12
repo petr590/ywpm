@@ -2193,7 +2193,7 @@ dependencies = [
 
 [[package]]
 name = "ywpm"
-version = "1.2.11"
+version = "1.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -2209,7 +2209,6 @@ dependencies = [
  "indoc",
  "itertools 0.15.0",
  "nix",
- "once_cell",
  "path-absolutize",
  "phf",
  "rand",

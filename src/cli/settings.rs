@@ -1,4 +1,5 @@
 use std::cell::RefMut;
+use std::num::NonZeroU16;
 use std::str::FromStr;
 
 use clap::Args;
@@ -43,7 +44,7 @@ pub struct Settings {
             "Уровень рекурсивного поиска файлов в папке. Диапазон: 1..65535. По умолчанию: 1"
         )
     )]
-    pub recursive_level: Option<u16>,
+    pub recursive_level: Option<NonZeroU16>,
 }
 
 impl Settings {

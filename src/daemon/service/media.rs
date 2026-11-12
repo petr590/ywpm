@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use imagesize::{ImageError, ImageResult};
 
@@ -6,6 +7,7 @@ use crate::core::Warning;
 use crate::daemon::service::resolution::Resolution;
 use crate::state::{DisplayMode, Wallpaper};
 
+#[derive(PartialEq, Clone, Copy)]
 pub enum MediaType {
     Image,
     Video,
@@ -22,14 +24,13 @@ impl MediaInfo {
         Self { resolution, mode, media_type }
     }
 
-    pub fn get_for_all<I>(wallpapers: I) -> (HashMap<String, Self>, Warning)
+    pub fn get_for_all<I>(wallpapers: I, warning: &mut Warning) -> HashMap<PathBuf, Self>
     where
         I: IntoIterator<Item = Wallpaper, IntoIter: ExactSizeIterator>,
     {
         let iter = wallpapers.into_iter();
         let mut info_map = HashMap::with_capacity(iter.len());
         let mut rest = Vec::new();
-        let mut warning = Warning::new();
 
         for wallpaper in iter {
             let path = wallpaper.path();
@@ -64,11 +65,11 @@ impl MediaInfo {
             }
         }
 
-        (info_map, warning)
+        info_map
     }
 }
 
-pub(crate) fn get_media_type(path: &str) -> Result<MediaType, Warning> {
+pub(crate) fn get_media_type(path: &Path) -> Result<MediaType, Warning> {
     match imagesize::size(path) {
         Ok(_)                           => return Ok(MediaType::Image),
         Err(ImageError::CorruptedImage) => return Err(Warning::with_msg_path("Image corrupted", path)),
@@ -81,7 +82,7 @@ pub(crate) fn get_media_type(path: &str) -> Result<MediaType, Warning> {
     }
 }
 
-pub(crate) fn get_resolution(path: &str) -> Result<Resolution, Warning> {
+pub(crate) fn get_resolution(path: &Path) -> Result<Resolution, Warning> {
     match get_image_resolution(path) {
         Ok(resolution)                  => return Ok(resolution),
         Err(ImageError::CorruptedImage) => return Err(Warning::with_msg_path("Image corrupted", path)),
@@ -92,7 +93,7 @@ pub(crate) fn get_resolution(path: &str) -> Result<Resolution, Warning> {
 }
 
 
-fn get_image_resolution(path: &str) -> ImageResult<Resolution> {
+fn get_image_resolution(path: &Path) -> ImageResult<Resolution> {
     let size = imagesize::size(path)?;
 
     Ok(Resolution::new(
@@ -101,7 +102,7 @@ fn get_image_resolution(path: &str) -> ImageResult<Resolution> {
     ))
 }
 
-fn get_video_resolution(path: &str) -> Result<Resolution, Warning> {
+fn get_video_resolution(path: &Path) -> Result<Resolution, Warning> {
     let ffprobe = ffprobe::ffprobe(path)
         .map_err(|err| Warning::with_msg_error_path("ffprobe error", &err, path))?;
 
